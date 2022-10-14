@@ -58,7 +58,7 @@ auto ping_main(uint32_t address, uint32_t netmask) -> void
 
     PosixSpawnFileActions actions;
     PosixSpawnAttr attr;
-    
+
     attr.setflags(POSIX_SPAWN_CLOEXEC_DEFAULT);
     actions.addopen(STDIN_FILENO , "/dev/null", O_RDONLY, 0);
     actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
@@ -69,7 +69,7 @@ auto ping_main(uint32_t address, uint32_t netmask) -> void
     char arg2[] {"-c1"};
     char arg3[11];
     char* const args[] {arg0, arg1, arg2, arg3, nullptr};
-    
+
     int kids = 0;
     for (auto addr = start + 1; addr < end; addr++) {
         sprintf(arg3, "%" PRIu32, addr);
@@ -132,11 +132,11 @@ auto main(int argc, char* argv[]) -> int
         std::cerr << "Usage: netscan interface network netmask" << std::endl;
         return 0;
     }
-    
+
     auto address = addrparse(argv[2]);
     auto netmask = addrparse(argv[3]);
     auto p = pcap_setup(argv[1]);
-    
+
     auto ping_thread = std::thread(ping_main, address, netmask);
     auto macs = scan_loop(std::move(p));
     ping_thread.join();

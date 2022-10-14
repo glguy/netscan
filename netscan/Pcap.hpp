@@ -21,7 +21,7 @@
 class Pcap {
     struct PcapDelete { auto operator()(pcap_t* p) const noexcept -> void; };
     std::unique_ptr<pcap_t, PcapDelete> _pcap;
-    
+
     explicit Pcap(pcap_t* p) noexcept;
     auto checked(int res) -> int;
 
@@ -38,7 +38,7 @@ public:
             (*reinterpret_cast<Callback*>(fp))(header, data);
         }, const_cast<u_char*>(reinterpret_cast<u_char const*>(&callback)));
     }
-    
+
     int loop(int cnt, pcap_handler callback, u_char *user);
 
     template <std::invocable<pcap_pkthdr*, u_char const*> Callback>

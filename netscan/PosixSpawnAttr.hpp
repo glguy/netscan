@@ -21,7 +21,7 @@ public:
     PosixSpawnAttr(PosixSpawnAttr &&rhs) = delete;
     auto operator= (PosixSpawnAttr &&) -> PosixSpawnAttr& = delete;
     auto operator= (PosixSpawnAttr const&) -> PosixSpawnAttr& = delete;
-    
+
     auto setflags(short flags) -> void;
     auto get() const -> posix_spawnattr_t const*;
 };
