@@ -7,7 +7,7 @@
 
 #include "BpfProgram.hpp"
 
-BpfProgram& BpfProgram::operator=(BpfProgram &&rhs) noexcept {
+auto BpfProgram::operator=(BpfProgram &&rhs) noexcept -> BpfProgram& {
     std::swap<bpf_program>(*this, rhs);
     return *this;
 }

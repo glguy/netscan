@@ -42,7 +42,7 @@ namespace {
 
 std::atomic_flag ping_done;
 
-Pcap pcap_setup(char const* const interface)
+auto pcap_setup(char const* const interface) -> Pcap
 {
     auto p = Pcap::open_live(interface, 16, 0, 100ms);
     auto filter = "icmp[icmptype] == icmp-echoreply";
@@ -51,7 +51,7 @@ Pcap pcap_setup(char const* const interface)
     return p;
 }
 
-void ping_main(uint32_t address, uint32_t netmask)
+auto ping_main(uint32_t address, uint32_t netmask) -> void
 {
     auto start = address & netmask;
     auto end   = start | ~netmask;
@@ -93,7 +93,7 @@ void ping_main(uint32_t address, uint32_t netmask)
     ping_done.test_and_set();
 }
 
-uint32_t addrparse(char const* str)
+auto addrparse(char const* str) -> uint32_t
 {
     int octets[4];
     int const parts = sscanf(str, "%d.%d.%d.%d", &octets[0], &octets[1], &octets[2], &octets[3]);
@@ -106,13 +106,12 @@ uint32_t addrparse(char const* str)
     }
 }
 
-std::unordered_set<std::string> scan_loop(Pcap p)
+auto scan_loop(Pcap p) -> std::unordered_set<std::string>
 {
     std::unordered_set<std::string> macs;
 
     while(!ping_done.test()) {
-        if (auto r = p.next()) {
-            auto [pkt_header, pkt_data] = *r;
+        p.dispatch(0, [&macs](auto pkt_header, auto pkt_data) {
             if (12 < pkt_header->caplen) {
                 char buffer[18];
                 sprintf(buffer, "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -120,14 +119,14 @@ std::unordered_set<std::string> scan_loop(Pcap p)
                         int(pkt_data[9]), int(pkt_data[10]), int(pkt_data[11]));
                 macs.insert(buffer);
             }
-        }
+        });
     }
     return macs;
 }
 
 }
 
-int main(int argc, char* argv[])
+auto main(int argc, char* argv[]) -> int
 {
     if (argc != 4) {
         std::cerr << "Usage: netscan interface network netmask" << std::endl;

@@ -19,12 +19,11 @@ public:
 
     PosixSpawnAttr(PosixSpawnAttr const&) = delete;
     PosixSpawnAttr(PosixSpawnAttr &&rhs) = delete;
-    PosixSpawnAttr& operator= (PosixSpawnAttr &&) = delete;
-    PosixSpawnAttr& operator= (PosixSpawnAttr const&) = delete;
+    auto operator= (PosixSpawnAttr &&) -> PosixSpawnAttr& = delete;
+    auto operator= (PosixSpawnAttr const&) -> PosixSpawnAttr& = delete;
     
-    void setflags(short flags);
-    
-    posix_spawnattr_t const* get() const;
+    auto setflags(short flags) -> void;
+    auto get() const -> posix_spawnattr_t const*;
 };
 
 #endif /* PosixSpawnAttr_hpp */

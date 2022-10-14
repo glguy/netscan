@@ -16,8 +16,8 @@ struct BpfProgram final : public bpf_program {
     BpfProgram() noexcept : bpf_program{} {}
     BpfProgram(BpfProgram const&) = delete;
     BpfProgram(BpfProgram &&rhs) noexcept;
-    BpfProgram& operator=(BpfProgram const&) = delete;
-    BpfProgram& operator=(BpfProgram &&rhs) noexcept;
+    auto operator=(BpfProgram const&) -> BpfProgram& = delete;
+    auto operator=(BpfProgram &&rhs) noexcept -> BpfProgram&;
     ~BpfProgram();
 };
 

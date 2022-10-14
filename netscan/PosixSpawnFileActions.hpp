@@ -19,10 +19,10 @@ public:
 
     PosixSpawnFileActions(PosixSpawnFileActions const&) = delete;
     PosixSpawnFileActions(PosixSpawnFileActions &&rhs) = delete;
-    PosixSpawnFileActions& operator= (PosixSpawnFileActions &&) = delete;
-    PosixSpawnFileActions& operator= (PosixSpawnFileActions const&) = delete;
+    auto operator= (PosixSpawnFileActions &&) -> PosixSpawnFileActions& = delete;
+    auto operator= (PosixSpawnFileActions const&) -> PosixSpawnFileActions& = delete;
     
-    void addopen(int filedes, char const* path, int flags, mode_t mode);
-    posix_spawn_file_actions_t const* get() const;
+    auto addopen(int filedes, char const* path, int flags, mode_t mode) -> void;
+    auto get() const -> posix_spawn_file_actions_t const*;
 };
 #endif /* PosixSpawnFileActions_hpp */
