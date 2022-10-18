@@ -27,6 +27,13 @@ auto PosixSpawnFileActions::addopen(int filedes, char const* path, int flags, mo
     }
 }
 
+auto PosixSpawnFileActions::addclose(int filedes) -> void {
+    int res = posix_spawn_file_actions_addclose(&_raw, filedes);
+    if (0 != res) {
+        throw std::system_error(errno, std::generic_category(), "posix_spawn_file_actions_addclose");
+    }
+}
+
 auto PosixSpawnFileActions::get() const -> posix_spawn_file_actions_t const* {
     return &_raw;
 }

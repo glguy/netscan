@@ -19,12 +19,12 @@
 
 #include <sys/wait.h> // waitpid
 
-#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <future>
 #include <numeric>
 #include <optional>
 #include <string>
@@ -40,8 +40,6 @@ using namespace std::chrono_literals;
 
 namespace {
 
-std::atomic_flag ping_done;
-
 auto pcap_setup(char const* const interface) -> Pcap
 {
     auto p = Pcap::open_live(interface, 16, 0, 100ms);
@@ -51,52 +49,44 @@ auto pcap_setup(char const* const interface) -> Pcap
     return p;
 }
 
-auto ping_main(uint32_t address, uint32_t netmask) -> void
+auto ping_main(int pcap_fd, uint32_t address, uint32_t netmask) -> void
 {
-    try {
-        auto start = address & netmask;
-        auto end   = start | ~netmask;
-        
-        PosixSpawnFileActions actions;
-        PosixSpawnAttr attr;
-        
-        attr.setflags(POSIX_SPAWN_CLOEXEC_DEFAULT);
-        actions.addopen(STDIN_FILENO , "/dev/null", O_RDONLY, 0);
-        actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
-        actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY, 0);
-        
-        char arg0[] {"ping"};
-        char arg1[] {"-W1"};
-        char arg2[] {"-c1"};
-        char arg3[11];
-        char* const args[] {arg0, arg1, arg2, arg3, nullptr};
-        
-        int kids = 0;
-        for (auto addr = start + 1; addr < end; addr++) {
-            sprintf(arg3, "%" PRIu32, addr);
-            auto res = posix_spawnp(nullptr, "ping", actions.get(), attr.get(), args, nullptr);
-            if (0 != res) {
-                throw std::system_error(res, std::generic_category(), "posix_spawn");
-            }
-            kids++;
+    auto start = address & netmask;
+    auto end   = start | ~netmask;
+    
+    PosixSpawnFileActions actions;
+    PosixSpawnAttr attr;
+    
+    actions.addopen(STDIN_FILENO , "/dev/null", O_RDONLY, 0);
+    actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    actions.addclose(pcap_fd);
+    
+    char arg0[] {"ping"};
+    char arg1[] {"-W1"};
+    char arg2[] {"-c1"};
+    char arg3[11];
+    char* const args[] {arg0, arg1, arg2, arg3, nullptr};
+    
+    int kids = 0;
+    for (auto addr = start + 1; addr < end; addr++) {
+        sprintf(arg3, "%" PRIu32, addr);
+        auto res = posix_spawnp(nullptr, "ping", actions.get(), attr.get(), args, nullptr);
+        if (0 != res) {
+            throw std::system_error(res, std::generic_category(), "posix_spawn");
         }
-
-        while (kids > 0) {
-            auto res = wait(nullptr);
-            if (-1 != res) {
-                kids -= 1;
-            } else if (EINTR != errno) {
-                throw std::system_error(errno, std::generic_category(), "wait");
-            }
-        }
-        
-        std::this_thread::sleep_for(1s);
-
-    } catch (std::exception const& e) {
-        std::cerr << "Failure: " << e.what() << std::endl;
+        kids++;
     }
 
-    ping_done.test_and_set();
+    while (kids > 0) {
+        auto res = wait(nullptr);
+        if (-1 != res) {
+            kids -= 1;
+        } else if (EINTR != errno) {
+            throw std::system_error(errno, std::generic_category(), "wait");
+        }
+    }
+    std::this_thread::sleep_for(1s);
 }
 
 auto addrparse(char const* str) -> uint32_t
@@ -124,14 +114,17 @@ auto main(int argc, char* argv[]) -> int
     try {
         auto address = addrparse(argv[2]);
         auto netmask = addrparse(argv[3]);
-        auto p = pcap_setup(argv[1]);
-        
-        auto ping_thread = std::thread(ping_main, address, netmask);
-        
-        std::unordered_set<std::string> macs;
-        
-        do {
-            p.dispatch(0, [&macs](auto pkt_header, auto pkt_data) {
+        auto pcap = pcap_setup(argv[1]);
+        auto pcap_fd = pcap.fileno();
+        auto pings = std::async(std::launch::async, ping_main, pcap_fd, address, netmask);
+
+        auto macs = std::unordered_set<std::string>();
+
+        for (auto busy = true; busy; ){
+            // Check before dispatch to guarantee we always do one dispatch *after* ping completion
+            busy = std::future_status::ready != pings.wait_for(0s);
+
+            pcap.dispatch(0, [&macs](auto pkt_header, auto pkt_data) {
                 if (12 < pkt_header->caplen) {
                     char buffer[18];
                     sprintf(buffer, "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -142,9 +135,9 @@ auto main(int argc, char* argv[]) -> int
                     }
                 }
             });
-        } while(!ping_done.test());
+        }
         
-        ping_thread.join();
+        pings.get(); // void, but rethrows exceptions
         
         return 0;
 

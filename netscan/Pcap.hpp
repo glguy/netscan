@@ -12,6 +12,7 @@
 
 #include <pcap/pcap.h>
 
+#include <chrono>
 #include <concepts>
 #include <memory>
 #include <tuple>
@@ -23,7 +24,7 @@ class Pcap {
     std::unique_ptr<pcap_t, PcapDelete> _pcap;
 
     explicit Pcap(pcap_t* p) noexcept;
-    auto checked(int res) -> int;
+    auto checked(int res) const -> int;
 
 public:
     auto compile(char const* str, bool optimize, bpf_u_int32 netmask) -> BpfProgram;
@@ -39,6 +40,10 @@ public:
     }
 
     static auto open_live(char const* device, int snaplen, bool promisc, std::chrono::milliseconds timeout_ms) -> Pcap;
+    
+    auto fileno() const -> int {
+        return checked(pcap_fileno(_pcap.get()));
+    }
 };
 
 #endif /* Pcap_hpp */

@@ -40,7 +40,7 @@ auto Pcap::open_live(char const* device, int snaplen, bool promisc, std::chrono:
     throw std::runtime_error(errbuf);
 }
 
-auto Pcap::checked(int res) -> int {
+auto Pcap::checked(int res) const -> int {
     if (PCAP_ERROR == res) {
         throw std::runtime_error(pcap_geterr(_pcap.get()));
     }
