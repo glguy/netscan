@@ -53,7 +53,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "en5 192.168.40.0 255.255.255.128"
+            argument = "en5 192.168.40.206 255.255.255.248"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

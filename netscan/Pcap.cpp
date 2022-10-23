@@ -32,6 +32,10 @@ auto Pcap::dispatch(int cnt, pcap_handler callback, u_char* data) -> int {
     return checked(pcap_dispatch(_pcap.get(), cnt, callback, data));
 }
 
+auto Pcap::loop(int cnt, pcap_handler callback, u_char* data) -> int {
+    return checked(pcap_loop(_pcap.get(), cnt, callback, data));
+}
+
 auto Pcap::open_live(char const* device, int snaplen, bool promisc, std::chrono::milliseconds timeout_ms) -> Pcap {
     char errbuf[PCAP_ERRBUF_SIZE];
     if (auto p = pcap_open_live(device, snaplen, promisc, boost::numeric_cast<int>(timeout_ms.count()), errbuf)) {

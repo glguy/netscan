@@ -16,8 +16,9 @@
 #include <fcntl.h> // O_WRONLY
 #include <inttypes.h> // PRIu32
 #include <unistd.h> // STDOUT_FILENO STDERR_FILENO
-
+#include <arpa/inet.h>
 #include <sys/wait.h> // waitpid
+#include <sys/select.h>
 
 #include <chrono>
 #include <cstring>
@@ -34,6 +35,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <stdexcept>
+#include <system_error>
 
 
 using namespace std::chrono_literals;
@@ -49,7 +52,7 @@ auto pcap_setup(char const* const interface) -> Pcap
     return p;
 }
 
-auto ping_main(int pcap_fd, uint32_t address, uint32_t netmask) -> void
+auto ping_main(uint32_t address, uint32_t netmask) -> void
 {
     auto start = address & netmask;
     auto end   = start | ~netmask;
@@ -60,7 +63,6 @@ auto ping_main(int pcap_fd, uint32_t address, uint32_t netmask) -> void
     actions.addopen(STDIN_FILENO , "/dev/null", O_RDONLY, 0);
     actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
     actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY, 0);
-    actions.addclose(pcap_fd);
     
     char arg0[] {"ping"};
     char arg1[] {"-W1"};
@@ -86,19 +88,18 @@ auto ping_main(int pcap_fd, uint32_t address, uint32_t netmask) -> void
             throw std::system_error(errno, std::generic_category(), "wait");
         }
     }
-    std::this_thread::sleep_for(1s);
 }
 
 auto addrparse(char const* str) -> uint32_t
 {
-    int octets[4];
-    int const parts = sscanf(str, "%d.%d.%d.%d", &octets[0], &octets[1], &octets[2], &octets[3]);
-    if (4 == parts && std::all_of(std::begin(octets), std::end(octets), [](auto i){return 0 <= i && i < 256; })) {
-        return std::accumulate(std::begin(octets), std::end(octets), 0, [](auto x, auto y){
-            return x<<8 | y;
-        });
-    } else {
-        throw std::invalid_argument("bad address");
+    in_addr_t addr;
+    switch (inet_pton(AF_INET, str, &addr)) {
+        case 0:
+            throw std::runtime_error("bad inet address");
+        case -1:
+            throw std::system_error(errno, std::generic_category(), "inet_pton");
+        default:
+            return ntohl(addr);
     }
 }
 
@@ -114,17 +115,13 @@ auto main(int argc, char* argv[]) -> int
     try {
         auto address = addrparse(argv[2]);
         auto netmask = addrparse(argv[3]);
+
         auto pcap = pcap_setup(argv[1]);
-        auto pcap_fd = pcap.fileno();
-        auto pings = std::async(std::launch::async, ping_main, pcap_fd, address, netmask);
+        auto raw = pcap.raw();
 
-        auto macs = std::unordered_set<std::string>();
-
-        for (auto busy = true; busy; ){
-            // Check before dispatch to guarantee we always do one dispatch *after* ping completion
-            busy = std::future_status::ready != pings.wait_for(0s);
-
-            pcap.dispatch(0, [&macs](auto pkt_header, auto pkt_data) {
+        auto listener = std::async(std::launch::async, [&pcap]() {
+            auto macs = std::unordered_set<std::string>();
+            pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
                 if (12 < pkt_header->caplen) {
                     char buffer[18];
                     sprintf(buffer, "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -135,10 +132,13 @@ auto main(int argc, char* argv[]) -> int
                     }
                 }
             });
-        }
-        
-        pings.get(); // void, but rethrows exceptions
-        
+        });
+                
+        ping_main(address, netmask);
+        std::this_thread::sleep_for(1s);
+        pcap_breakloop(raw);
+        listener.get();
+
         return 0;
 
     } catch (std::exception const& e) {
