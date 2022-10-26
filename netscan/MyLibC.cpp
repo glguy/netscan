@@ -64,3 +64,41 @@ auto Sigaction(int sig, struct sigaction const& act) -> struct sigaction {
     }
     return old;
 }
+
+auto Pipe() -> Pipes {
+    int pipes[2];
+    auto res = pipe(pipes);
+    if (-1 == res) {
+        throw std::system_error(errno, std::generic_category(), "pipe");
+    }
+    return {pipes[0], pipes[1]};
+}
+
+auto Close(int fd) -> void {
+    for(;;) {
+        auto res = close(fd);
+        if (-1 == res) {
+            auto e = errno;
+            if (EINTR != e) {
+                throw std::system_error(errno, std::generic_category(), "pipe");
+            }
+        } else {
+            return;
+        }
+    }
+}
+
+auto WriteAll(int fd, char const* buf, size_t n) -> void {
+    while (n > 0) {
+        auto res = write(fd, buf, n);
+        if (-1 == res) {
+            auto e = errno;
+            if (EINTR != e) {
+                throw std::system_error(errno, std::generic_category(), "pipe");
+            }
+        } else {
+            buf += res;
+            n -= res;
+        }
+    }
+}

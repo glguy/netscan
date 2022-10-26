@@ -78,8 +78,12 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
     }
 }
 
-auto PcapMain(Pcap pcap) -> void {
-
+auto PcapMain(char const* source, int fd) -> void {
+    
+    auto pcap = pcap_setup(source);
+    WriteAll(fd, "1", 1);
+    Close(fd);
+    
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
@@ -99,7 +103,16 @@ auto PcapMain(Pcap pcap) -> void {
     });
 }
 
+auto check_ready(int fd) {
+    char buffer;
+    auto got = read(fd, &buffer, 1);
+    close(fd);
+    return 1 == got;
 }
+
+}
+
+
 
 auto main(int argc, char* argv[]) -> int
 {
@@ -111,14 +124,18 @@ auto main(int argc, char* argv[]) -> int
     try {
         auto address = InAddrPton(argv[2]);
         auto netmask = InAddrPton(argv[3]);
-        pid_t pid;
-        {
-            auto pcap = pcap_setup(argv[1]);
-            pid = Fork();
-            if (0 == pid) {
-                PcapMain(std::move(pcap));
-                exit(0);
-            }
+
+        auto pipes = Pipe();
+        pid_t pid = Fork();
+        if (0 == pid) {
+            close(pipes.read);
+            PcapMain(argv[1], pipes.write);
+            exit(0);
+        }
+
+        Close(pipes.write);
+        if (!check_ready(pipes.read)) {
+            return 1;
         }
 
         ping_range(address, netmask);
