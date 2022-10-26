@@ -78,8 +78,12 @@ public:
         pcap_setnonblock(_pcap.get(), x, errbuf);
     }
     
-    auto raw() -> pcap_t* {
+    auto get() -> pcap_t* {
         return _pcap.get();
+    }
+    
+    auto release() -> pcap_t* {
+        return _pcap.release();
     }
 };
 

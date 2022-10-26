@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F764CB152905CF8D00F1724B /* PosixSpawn.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F764CB132905CF8D00F1724B /* PosixSpawn.cpp */; };
 		F79A62DB28EE42C700E56152 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F79A62DA28EE42C700E56152 /* main.cpp */; };
 		F79A62E328EE42F200E56152 /* libpcap.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F79A62E228EE42F100E56152 /* libpcap.tbd */; };
 		F79A62E628F4E59C00E56152 /* Pcap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F79A62E428F4E59C00E56152 /* Pcap.cpp */; };
@@ -28,6 +29,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F764CB132905CF8D00F1724B /* PosixSpawn.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PosixSpawn.cpp; sourceTree = "<group>"; };
+		F764CB142905CF8D00F1724B /* PosixSpawn.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = PosixSpawn.hpp; sourceTree = "<group>"; };
 		F79A62D728EE42C700E56152 /* netscan */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = netscan; sourceTree = BUILT_PRODUCTS_DIR; };
 		F79A62DA28EE42C700E56152 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		F79A62E228EE42F100E56152 /* libpcap.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libpcap.tbd; path = usr/lib/libpcap.tbd; sourceTree = SDKROOT; };
@@ -82,6 +85,8 @@
 				F79A62EB28F624A400E56152 /* PosixSpawnFileActions.hpp */,
 				F79A62ED28F72E4B00E56152 /* PosixSpawnAttr.cpp */,
 				F79A62EE28F72E4B00E56152 /* PosixSpawnAttr.hpp */,
+				F764CB132905CF8D00F1724B /* PosixSpawn.cpp */,
+				F764CB142905CF8D00F1724B /* PosixSpawn.hpp */,
 			);
 			path = netscan;
 			sourceTree = "<group>";
@@ -152,6 +157,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F79A62EF28F72E4B00E56152 /* PosixSpawnAttr.cpp in Sources */,
+				F764CB152905CF8D00F1724B /* PosixSpawn.cpp in Sources */,
 				F79A62DB28EE42C700E56152 /* main.cpp in Sources */,
 				F79A62E628F4E59C00E56152 /* Pcap.cpp in Sources */,
 				F79A62E928F61C4700E56152 /* BpfProgram.cpp in Sources */,
@@ -275,6 +281,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				GCC_WARN_PEDANTIC = YES;
 				HEADER_SEARCH_PATHS = /usr/local/opt/boost/include;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -284,6 +291,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				GCC_WARN_PEDANTIC = YES;
 				HEADER_SEARCH_PATHS = /usr/local/opt/boost/include;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
