@@ -22,7 +22,7 @@ public:
     auto operator= (PosixSpawnFileActions &&) -> PosixSpawnFileActions& = delete;
     auto operator= (PosixSpawnFileActions const&) -> PosixSpawnFileActions& = delete;
 
-    auto addopen(int filedes, char const* path, int flags, mode_t mode) -> void;
+    auto addopen(int filedes, char const* path, int flags, mode_t mode = 0) -> void;
     auto addclose(int filedes) -> void;
     auto get() const -> posix_spawn_file_actions_t const*;
 };

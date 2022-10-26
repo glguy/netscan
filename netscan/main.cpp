@@ -14,7 +14,6 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
-#include <cstring>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -28,6 +27,7 @@
 #include <utility>
 #include <vector>
 
+#include <boost/range/irange.hpp>
 #include <fmt/format.h>
 #include <pcap/pcap.h>
 
@@ -40,9 +40,9 @@ using namespace std::chrono_literals;
 
 namespace {
 
-auto pcap_setup(char const* const interface) -> Pcap
+auto pcap_setup(char const* const device) -> Pcap
 {
-    auto p = Pcap::open_live(interface, 16, 0, 100ms);
+    auto p = Pcap::open_live(device, 16, 0, 100ms);
     auto filter = "icmp[icmptype] == icmp-echoreply";
     auto program = p.compile(filter, true, PCAP_NETMASK_UNKNOWN);
     p.setfilter(&program);
@@ -51,25 +51,25 @@ auto pcap_setup(char const* const interface) -> Pcap
 
 auto ping_range(in_addr_t address, in_addr_t netmask) -> void
 {
-    auto start = ntohl(address & netmask);
+    auto start = ntohl(address);
     auto end   = ntohl(address | ~netmask);
 
     PosixSpawnFileActions actions;
     PosixSpawnAttr attr;
 
-    actions.addopen(STDIN_FILENO , "/dev/null", O_RDONLY, 0);
-    actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
-    actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    actions.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
+    actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
+    actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY);
 
     char arg0[] {"ping"};
     char arg1[] {"-W1"};
     char arg2[] {"-c1"};
-    char arg3[11];
-    char* const args[] {arg0, arg1, arg2, arg3, nullptr};
+    char* args[] {arg0, arg1, arg2, nullptr, nullptr};
 
     auto pids = std::vector<pid_t>();
-    for (auto addr = start + 1; addr < end; addr++) {
-        sprintf(arg3, "%" PRIu32, addr);
+    for (auto addr : boost::irange(start+1, end)) {
+        auto arg = std::to_string(addr);
+        args[3] = arg.data(); // null-terminated since C++11
         pids.push_back(PosixSpawnp("ping", actions, attr, args, nullptr));
     }
 
@@ -79,14 +79,14 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
 }
 
 
-auto wait_ready(int fd) {
+auto wait_ready(int fd) -> bool {
     char buffer;
     auto got = ReadAll(fd, &buffer, 1);
     Close(fd);
     return 1 == got;
 }
 
-auto send_ready(int fd) {
+auto send_ready(int fd) -> void {
     WriteAll(fd, "1", 1);
     Close(fd);
 }
@@ -99,12 +99,12 @@ auto PcapMain(char const* source, int fd) -> void {
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
-    LocalSignalHandler sigusr(SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
+    LocalSignalHandler sigusr {SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND}};
 
     // Wait to signal ready until signal handler is installed
     send_ready(fd);
 
-    auto macs = std::unordered_set<std::string>();
+    auto macs = std::unordered_set<std::string>{};
     pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
         if (11 < pkt_header->caplen) {
             auto mac = fmt::format(
@@ -132,13 +132,16 @@ auto main(int argc, char* argv[]) -> int
     try {
         auto address = InAddrPton(argv[2]);
         auto netmask = InAddrPton(argv[3]);
+        if (address & ~netmask) {
+            throw std::invalid_argument("network and netmask mismatch");
+        }
 
         auto pipes = Pipe();
         pid_t pid = Fork();
         if (0 == pid) {
             close(pipes.read);
             PcapMain(argv[1], pipes.write);
-            exit(0);
+            exit(EXIT_SUCCESS);
         }
 
         Close(pipes.write);
@@ -154,9 +157,6 @@ auto main(int argc, char* argv[]) -> int
         if (!WIFEXITED(status) || WEXITSTATUS(status)) {
             return 1;
         }
-
-        return 0;
-
     } catch (std::exception const& e) {
         std::cerr << "Failure: " << e.what() << std::endl;
         return 1;

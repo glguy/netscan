@@ -8,7 +8,7 @@
 #include "LocalSignalHandler.hpp"
 
 LocalSignalHandler::LocalSignalHandler(int sig, struct sigaction const& act)
-    : sig{sig}, previous { Sigaction(sig, act) } {}
+    : sig{sig}, previous{Sigaction(sig, act)} {}
 
 LocalSignalHandler::~LocalSignalHandler() {
     Sigaction(sig, previous);
