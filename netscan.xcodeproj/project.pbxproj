@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		F764CB152905CF8D00F1724B /* PosixSpawn.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F764CB132905CF8D00F1724B /* PosixSpawn.cpp */; };
+		F764CB1B2909AF0800F1724B /* MyLibC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F764CB192909AF0800F1724B /* MyLibC.cpp */; };
+		F764CB1E2909AFF700F1724B /* LocalSignalHandler.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F764CB1C2909AFF700F1724B /* LocalSignalHandler.cpp */; };
 		F79A62DB28EE42C700E56152 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F79A62DA28EE42C700E56152 /* main.cpp */; };
 		F79A62E328EE42F200E56152 /* libpcap.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F79A62E228EE42F100E56152 /* libpcap.tbd */; };
 		F79A62E628F4E59C00E56152 /* Pcap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F79A62E428F4E59C00E56152 /* Pcap.cpp */; };
@@ -31,6 +33,10 @@
 /* Begin PBXFileReference section */
 		F764CB132905CF8D00F1724B /* PosixSpawn.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PosixSpawn.cpp; sourceTree = "<group>"; };
 		F764CB142905CF8D00F1724B /* PosixSpawn.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = PosixSpawn.hpp; sourceTree = "<group>"; };
+		F764CB192909AF0800F1724B /* MyLibC.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = MyLibC.cpp; sourceTree = "<group>"; };
+		F764CB1A2909AF0800F1724B /* MyLibC.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = MyLibC.hpp; sourceTree = "<group>"; };
+		F764CB1C2909AFF700F1724B /* LocalSignalHandler.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LocalSignalHandler.cpp; sourceTree = "<group>"; };
+		F764CB1D2909AFF700F1724B /* LocalSignalHandler.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LocalSignalHandler.hpp; sourceTree = "<group>"; };
 		F79A62D728EE42C700E56152 /* netscan */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = netscan; sourceTree = BUILT_PRODUCTS_DIR; };
 		F79A62DA28EE42C700E56152 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		F79A62E228EE42F100E56152 /* libpcap.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libpcap.tbd; path = usr/lib/libpcap.tbd; sourceTree = SDKROOT; };
@@ -87,6 +93,10 @@
 				F79A62EE28F72E4B00E56152 /* PosixSpawnAttr.hpp */,
 				F764CB132905CF8D00F1724B /* PosixSpawn.cpp */,
 				F764CB142905CF8D00F1724B /* PosixSpawn.hpp */,
+				F764CB192909AF0800F1724B /* MyLibC.cpp */,
+				F764CB1A2909AF0800F1724B /* MyLibC.hpp */,
+				F764CB1C2909AFF700F1724B /* LocalSignalHandler.cpp */,
+				F764CB1D2909AFF700F1724B /* LocalSignalHandler.hpp */,
 			);
 			path = netscan;
 			sourceTree = "<group>";
@@ -160,7 +170,9 @@
 				F764CB152905CF8D00F1724B /* PosixSpawn.cpp in Sources */,
 				F79A62DB28EE42C700E56152 /* main.cpp in Sources */,
 				F79A62E628F4E59C00E56152 /* Pcap.cpp in Sources */,
+				F764CB1B2909AF0800F1724B /* MyLibC.cpp in Sources */,
 				F79A62E928F61C4700E56152 /* BpfProgram.cpp in Sources */,
+				F764CB1E2909AFF700F1724B /* LocalSignalHandler.cpp in Sources */,
 				F79A62EC28F624A400E56152 /* PosixSpawnFileActions.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

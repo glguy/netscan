@@ -10,8 +10,6 @@
 
 #include <pcap/pcap.h>
 
-#include <utility>
-
 struct BpfProgram final : public bpf_program {
     BpfProgram() noexcept : bpf_program{} {}
     BpfProgram(BpfProgram const&) = delete;

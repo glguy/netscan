@@ -5,18 +5,10 @@
 //  Created by Eric Mertens on 10/5/22.
 //
 
-#include <pcap/pcap.h>
-#include <fmt/format.h>
-
-#include "Pcap.hpp"
-#include "PosixSpawn.hpp"
-
 #include <spawn.h> // posix_spawn
 #include <fcntl.h> // O_WRONLY
 #include <inttypes.h> // PRIu32
 #include <unistd.h> // STDOUT_FILENO STDERR_FILENO
-#include <arpa/inet.h> // inet_pton
-#include <sys/wait.h> // waitpid
 
 #include <cerrno>
 #include <chrono>
@@ -36,61 +28,17 @@
 #include <utility>
 #include <vector>
 
+#include <fmt/format.h>
+#include <pcap/pcap.h>
+
+#include "LocalSignalHandler.hpp"
+#include "MyLibC.hpp"
+#include "Pcap.hpp"
+#include "PosixSpawn.hpp"
+
 using namespace std::chrono_literals;
 
 namespace {
-
-auto Wait(pid_t pid = 0, int options = 0) -> std::tuple<pid_t, int> {
-    for (;;) {
-        int stat;
-        auto res = waitpid(pid, &stat, options);
-        if (-1 == res) {
-            auto e = errno;
-            if (EINTR != e) {
-                throw std::system_error(e, std::generic_category(), "waitpid");
-            }
-        } else {
-            return {res, stat};
-        }
-    }
-}
-
-auto Fork() -> pid_t {
-    auto res = fork();
-    if (-1 == res) {
-        throw std::system_error(errno, std::generic_category(), "fork");
-    }
-    return res;
-}
-
-auto Kill(pid_t pid, int sig) -> void {
-    auto res = kill(pid, sig);
-    if (-1 == res) {
-        throw std::system_error(errno, std::generic_category(), "kill");
-    }
-}
-
-auto InAddrPton(char const* str) -> in_addr_t
-{
-    in_addr_t addr;
-    switch (inet_pton(AF_INET, str, &addr)) {
-        case 0:
-            throw std::invalid_argument("bad inet address");
-        case -1:
-            throw std::system_error(errno, std::generic_category(), "inet_pton");
-        default:
-            return addr;
-    }
-}
-
-auto Sigaction(int sig, struct sigaction const& act) -> struct sigaction {
-    struct sigaction old;
-    auto res = sigaction(sig, &act, &old);
-    if (-1 == res) {
-        throw std::system_error(errno, std::generic_category(), "sigaction");
-    }
-    return old;
-}
 
 auto pcap_setup(char const* const interface) -> Pcap
 {
@@ -130,23 +78,12 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
     }
 }
 
-class LocalSignalHandler {
-    int const sig;
-    struct sigaction const previous;
-public:
-    LocalSignalHandler(int sig, struct sigaction const& act)
-        : sig{sig}, previous { Sigaction(sig, act) } {}
-    ~LocalSignalHandler() {
-        Sigaction(sig, previous);
-    }
-};
-
 auto PcapMain(Pcap pcap) -> void {
 
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
-    LocalSignalHandler sigusr(SIGUSR1, {[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
+    LocalSignalHandler sigusr(SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
 
     auto macs = std::unordered_set<std::string>();
     pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
@@ -163,7 +100,6 @@ auto PcapMain(Pcap pcap) -> void {
 }
 
 }
-
 
 auto main(int argc, char* argv[]) -> int
 {

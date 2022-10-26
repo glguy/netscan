@@ -10,14 +10,13 @@
 
 #include "BpfProgram.hpp"
 
-#include <pcap/pcap.h>
-
 #include <chrono>
 #include <concepts>
 #include <memory>
-#include <tuple>
 #include <optional>
-#include <functional>
+#include <tuple>
+
+#include <pcap/pcap.h>
 
 class Pcap {
     struct PcapDelete { auto operator()(pcap_t* p) const noexcept -> void; };

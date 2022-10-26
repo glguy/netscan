@@ -8,6 +8,7 @@
 #include "BpfProgram.hpp"
 
 #include <new>
+#include <utility>
 
 auto BpfProgram::operator=(BpfProgram &&rhs) noexcept -> BpfProgram& {
     if (&rhs != this) {

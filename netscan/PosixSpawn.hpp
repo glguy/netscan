@@ -8,10 +8,10 @@
 #ifndef PosixSpawn_hpp
 #define PosixSpawn_hpp
 
+#include <spawn.h>
+
 #include "PosixSpawnAttr.hpp"
 #include "PosixSpawnFileActions.hpp"
-
-#include <spawn.h>
 
 auto PosixSpawnp
  (char const* path,
