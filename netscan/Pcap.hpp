@@ -21,10 +21,10 @@
 class Pcap {
     struct PcapDelete { auto operator()(pcap_t* p) const noexcept -> void; };
     std::unique_ptr<pcap_t, PcapDelete> _pcap;
-    
+
     explicit Pcap(pcap_t* p) noexcept;
     auto checked(int res) const -> int;
-    
+
 public:
     static auto open_live(char const* device, int snaplen, bool promisc, std::chrono::milliseconds timeout_ms) -> Pcap;
 
@@ -37,7 +37,7 @@ public:
     auto selectable_fd() -> int;
     auto required_select_timeout() -> timeval const*;
     auto set_nonblock(int x) -> void;
-    
+
     auto get() -> pcap_t*;
     auto release() -> pcap_t*;
 
@@ -47,7 +47,7 @@ public:
             (*reinterpret_cast<Callback*>(fp))(header, data);
         }, const_cast<u_char*>(reinterpret_cast<u_char const*>(&callback)));
     }
-    
+
     template <std::invocable<pcap_pkthdr*, u_char const*> Callback>
     auto loop(int cnt, Callback const& callback) -> int {
         return loop(cnt, [](auto fp, auto header, auto data) {

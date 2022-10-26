@@ -15,7 +15,7 @@ auto PosixSpawnp
   char * const* argv,
   char * const* envp
   ) -> pid_t {
-     
+
      pid_t pid;
      auto res = posix_spawnp(&pid, path, actions.get(), attr.get(), argv, envp);
      if (0 != res) {

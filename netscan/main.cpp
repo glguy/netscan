@@ -53,26 +53,26 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
 {
     auto start = ntohl(address & netmask);
     auto end   = ntohl(address | ~netmask);
-    
+
     PosixSpawnFileActions actions;
     PosixSpawnAttr attr;
-    
+
     actions.addopen(STDIN_FILENO , "/dev/null", O_RDONLY, 0);
     actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
     actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY, 0);
-    
+
     char arg0[] {"ping"};
     char arg1[] {"-W1"};
     char arg2[] {"-c1"};
     char arg3[11];
     char* const args[] {arg0, arg1, arg2, arg3, nullptr};
-    
+
     auto pids = std::vector<pid_t>();
     for (auto addr = start + 1; addr < end; addr++) {
         sprintf(arg3, "%" PRIu32, addr);
         pids.push_back(PosixSpawnp("ping", actions, attr, args, nullptr));
     }
-    
+
     for (auto pid : pids) {
         Wait(pid);
     }
@@ -93,14 +93,14 @@ auto send_ready(int fd) {
 
 
 auto PcapMain(char const* source, int fd) -> void {
-    
+
     auto pcap = pcap_setup(source);
-    
+
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
     LocalSignalHandler sigusr(SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
-    
+
     // Wait to signal ready until signal handler is installed
     send_ready(fd);
 
