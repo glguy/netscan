@@ -7,8 +7,13 @@
 
 #include "BpfProgram.hpp"
 
+#include <new>
+
 auto BpfProgram::operator=(BpfProgram &&rhs) noexcept -> BpfProgram& {
-    std::swap<bpf_program>(*this, rhs);
+    if (&rhs != this) {
+        this->~BpfProgram();
+        new (this) BpfProgram(std::move(rhs));
+    }
     return *this;
 }
 
