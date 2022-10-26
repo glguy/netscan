@@ -282,7 +282,12 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				GCC_WARN_PEDANTIC = YES;
-				HEADER_SEARCH_PATHS = /usr/local/opt/boost/include;
+				HEADER_SEARCH_PATHS = (
+					/usr/local/opt/boost/include,
+					/usr/local/opt/fmt/include,
+				);
+				LIBRARY_SEARCH_PATHS = /usr/local/opt/fmt/lib;
+				OTHER_LDFLAGS = "-lfmt";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -292,7 +297,12 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				GCC_WARN_PEDANTIC = YES;
-				HEADER_SEARCH_PATHS = /usr/local/opt/boost/include;
+				HEADER_SEARCH_PATHS = (
+					/usr/local/opt/boost/include,
+					/usr/local/opt/fmt/include,
+				);
+				LIBRARY_SEARCH_PATHS = /usr/local/opt/fmt/lib;
+				OTHER_LDFLAGS = "-lfmt";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

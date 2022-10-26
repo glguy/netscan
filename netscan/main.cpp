@@ -6,6 +6,7 @@
 //
 
 #include <pcap/pcap.h>
+#include <fmt/format.h>
 
 #include "Pcap.hpp"
 #include "PosixSpawn.hpp"
@@ -87,7 +88,7 @@ auto InAddrPton(char const* str) -> in_addr_t
     }
 }
 
-auto Sigaction(int sig, struct sigaction act) -> struct sigaction {
+auto Sigaction(int sig, struct sigaction const& act) -> struct sigaction {
     struct sigaction old;
     auto res = sigaction(sig, &act, &old);
     if (-1 == res) {
@@ -98,7 +99,7 @@ auto Sigaction(int sig, struct sigaction act) -> struct sigaction {
 
 auto pcap_setup(char const* const interface) -> Pcap
 {
-    auto p = Pcap::open_live(interface, 100, 0, 100ms);
+    auto p = Pcap::open_live(interface, 16, 0, 100ms);
     auto filter = "icmp[icmptype] == icmp-echoreply";
     auto program = p.compile(filter, true, PCAP_NETMASK_UNKNOWN);
     p.setfilter(&program);
@@ -134,29 +135,36 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
     }
 }
 
+class LocalSignalHandler {
+    int const sig;
+    struct sigaction const previous;
+public:
+    LocalSignalHandler(int sig, struct sigaction const& act)
+        : sig{sig}, previous { Sigaction(sig, act) } {}
+    ~LocalSignalHandler() {
+        Sigaction(sig, previous);
+    }
+};
+
 auto PcapMain(Pcap pcap) -> int {
-    
+
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
-    Sigaction(SIGUSR1, {[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
+    LocalSignalHandler sigusr(SIGUSR1, {[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
 
     auto macs = std::unordered_set<std::string>();
     auto res = pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
-        if (12 < pkt_header->caplen) {
-            char buffer[18];
-            sprintf(buffer, "%02x:%02x:%02x:%02x:%02x:%02x",
-                    int(pkt_data[6]), int(pkt_data[7]),  int(pkt_data[8]),
-                    int(pkt_data[9]), int(pkt_data[10]), int(pkt_data[11]));
-            if (macs.insert(buffer).second) {
-                std::cout << buffer << std::endl;
+        if (11 < pkt_header->caplen) {
+            auto mac = fmt::format(
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                pkt_data[ 6], pkt_data[ 7], pkt_data[ 8],
+                pkt_data[ 9], pkt_data[10], pkt_data[11]);
+            if (macs.insert(mac).second) {
+                std::cout << mac << std::endl;
             }
         }
     });
-    
-    Sigaction(SIGUSR1, {SIG_DFL});
-    raw = nullptr;
-    
     return PCAP_ERROR == res;
 }
 
