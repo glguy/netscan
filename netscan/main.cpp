@@ -99,7 +99,7 @@ auto PcapMain(char const* source, int fd) -> void {
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
-    LocalSignalHandler sigusr {SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND}};
+    LocalSignalHandler sigusr {SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset}};
 
     // Wait to signal ready until signal handler is installed
     send_ready(fd);
