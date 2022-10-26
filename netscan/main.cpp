@@ -11,23 +11,23 @@
 #include "Pcap.hpp"
 #include "PosixSpawn.hpp"
 
-#include <errno.h>
 #include <spawn.h> // posix_spawn
 #include <fcntl.h> // O_WRONLY
 #include <inttypes.h> // PRIu32
 #include <unistd.h> // STDOUT_FILENO STDERR_FILENO
-#include <arpa/inet.h>
+#include <arpa/inet.h> // inet_pton
 #include <sys/wait.h> // waitpid
-#include <sys/select.h>
 
+#include <cerrno>
 #include <chrono>
+#include <csignal>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <future>
-#include <numeric>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -35,11 +35,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <stdexcept>
-#include <system_error>
-#include <unistd.h>
-#include <signal.h>
-#include <cstdlib>
 
 using namespace std::chrono_literals;
 
@@ -146,7 +141,7 @@ public:
     }
 };
 
-auto PcapMain(Pcap pcap) -> int {
+auto PcapMain(Pcap pcap) -> void {
 
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
@@ -154,7 +149,7 @@ auto PcapMain(Pcap pcap) -> int {
     LocalSignalHandler sigusr(SIGUSR1, {[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
 
     auto macs = std::unordered_set<std::string>();
-    auto res = pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
+    pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
         if (11 < pkt_header->caplen) {
             auto mac = fmt::format(
                 "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
@@ -165,7 +160,6 @@ auto PcapMain(Pcap pcap) -> int {
             }
         }
     });
-    return PCAP_ERROR == res;
 }
 
 }
@@ -186,7 +180,8 @@ auto main(int argc, char* argv[]) -> int
             auto pcap = pcap_setup(argv[1]);
             pid = Fork();
             if (0 == pid) {
-                return PcapMain(std::move(pcap));
+                PcapMain(std::move(pcap));
+                exit(0);
             }
         }
 
