@@ -79,7 +79,7 @@ auto InAddrPton(char const* str) -> in_addr_t
     in_addr_t addr;
     switch (inet_pton(AF_INET, str, &addr)) {
         case 0:
-            throw std::runtime_error("bad inet address");
+            throw std::invalid_argument("bad inet address");
         case -1:
             throw std::system_error(errno, std::generic_category(), "inet_pton");
         default:
@@ -137,7 +137,9 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
 auto PcapMain(Pcap pcap) -> int {
     
     static pcap_t* volatile raw = pcap.get();
-    Sigaction(SIGUSR1, {[](int) { pcap_breakloop(raw); }, 0 /*mask*/, SA_RESETHAND});
+    sigset_t sigset;
+    sigemptyset(&sigset);
+    Sigaction(SIGUSR1, {[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
 
     auto macs = std::unordered_set<std::string>();
     auto res = pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {

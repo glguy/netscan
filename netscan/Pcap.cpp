@@ -50,3 +50,39 @@ auto Pcap::checked(int res) const -> int {
     }
     return res;
 }
+
+auto Pcap::next() -> std::optional<std::pair<pcap_pkthdr*, u_char const*>> {
+    pcap_pkthdr *h;
+    u_char const* d;
+    switch (checked(pcap_next_ex(_pcap.get(), &h, &d))) {
+        case 1:
+            return {{h,d}};
+        default:
+            return {};
+    }
+}
+
+auto Pcap::selectable_fd() -> int {
+    return pcap_get_selectable_fd(_pcap.get());
+}
+
+auto Pcap::required_select_timeout() -> timeval const* {
+    return pcap_get_required_select_timeout(_pcap.get());
+}
+
+auto Pcap::set_nonblock(int x) -> void {
+    char errbuf[PCAP_ERRBUF_SIZE];
+    pcap_setnonblock(_pcap.get(), x, errbuf);
+}
+
+auto Pcap::get() -> pcap_t* {
+    return _pcap.get();
+}
+
+auto Pcap::release() -> pcap_t* {
+    return _pcap.release();
+}
+
+auto Pcap::fileno() const -> int {
+    return checked(pcap_fileno(_pcap.get()));
+}
