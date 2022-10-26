@@ -53,61 +53,69 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
 {
     auto start = ntohl(address & netmask);
     auto end   = ntohl(address | ~netmask);
-
+    
     PosixSpawnFileActions actions;
     PosixSpawnAttr attr;
-
+    
     actions.addopen(STDIN_FILENO , "/dev/null", O_RDONLY, 0);
     actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
     actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY, 0);
-
+    
     char arg0[] {"ping"};
     char arg1[] {"-W1"};
     char arg2[] {"-c1"};
     char arg3[11];
     char* const args[] {arg0, arg1, arg2, arg3, nullptr};
-
+    
     auto pids = std::vector<pid_t>();
     for (auto addr = start + 1; addr < end; addr++) {
         sprintf(arg3, "%" PRIu32, addr);
         pids.push_back(PosixSpawnp("ping", actions, attr, args, nullptr));
     }
-
+    
     for (auto pid : pids) {
         Wait(pid);
     }
 }
 
+
+auto wait_ready(int fd) {
+    char buffer;
+    auto got = ReadAll(fd, &buffer, 1);
+    Close(fd);
+    return 1 == got;
+}
+
+auto send_ready(int fd) {
+    WriteAll(fd, "1", 1);
+    Close(fd);
+}
+
+
 auto PcapMain(char const* source, int fd) -> void {
     
     auto pcap = pcap_setup(source);
-    WriteAll(fd, "1", 1);
-    Close(fd);
     
     static pcap_t* volatile raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
     LocalSignalHandler sigusr(SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset, SA_RESETHAND});
+    
+    // Wait to signal ready until signal handler is installed
+    send_ready(fd);
 
     auto macs = std::unordered_set<std::string>();
     pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
         if (11 < pkt_header->caplen) {
             auto mac = fmt::format(
-                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                pkt_data[ 6], pkt_data[ 7], pkt_data[ 8],
-                pkt_data[ 9], pkt_data[10], pkt_data[11]);
+               "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+               pkt_data[ 6], pkt_data[ 7], pkt_data[ 8],
+               pkt_data[ 9], pkt_data[10], pkt_data[11]);
             if (macs.insert(mac).second) {
                 std::cout << mac << std::endl;
             }
         }
     });
-}
-
-auto check_ready(int fd) {
-    char buffer;
-    auto got = read(fd, &buffer, 1);
-    close(fd);
-    return 1 == got;
 }
 
 }
@@ -134,7 +142,7 @@ auto main(int argc, char* argv[]) -> int
         }
 
         Close(pipes.write);
-        if (!check_ready(pipes.read)) {
+        if (!wait_ready(pipes.read)) {
             return 1;
         }
 
@@ -144,7 +152,7 @@ auto main(int argc, char* argv[]) -> int
         Kill(pid, SIGUSR1);
         auto [_, status] = Wait(pid);
         if (!WIFEXITED(status) || WEXITSTATUS(status)) {
-            throw std::runtime_error("pcap_loop_failed");
+            return 1;
         }
 
         return 0;

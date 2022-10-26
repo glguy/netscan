@@ -12,6 +12,7 @@
 #include <cerrno>
 #include <system_error>
 #include <csignal>
+#include <unistd.h>
 
 auto Wait(pid_t pid, int options) -> std::tuple<pid_t, int> {
     for (;;) {
@@ -88,17 +89,48 @@ auto Close(int fd) -> void {
     }
 }
 
-auto WriteAll(int fd, char const* buf, size_t n) -> void {
-    while (n > 0) {
-        auto res = write(fd, buf, n);
-        if (-1 == res) {
-            auto e = errno;
-            if (EINTR != e) {
-                throw std::system_error(errno, std::generic_category(), "pipe");
+auto WriteAll(int fd, char const* buf, size_t n) -> size_t {
+    size_t wrote = 0;
+    while (wrote < n) {
+        auto res = write(fd, buf + wrote, n - wrote);
+        switch (res) {
+            case 0:
+                return wrote;
+            case -1:
+            {
+                auto e = errno;
+                if (EINTR != e) {
+                    throw std::system_error(errno, std::generic_category(), "pipe");
+                }
+                break;
             }
-        } else {
-            buf += res;
-            n -= res;
+                default:
+                wrote += res;
+                break;
         }
     }
+    return wrote;
+}
+
+auto ReadAll(int fd, char* buf, size_t n) -> size_t {
+    size_t got = 0;
+    while (got < n) {
+        auto res = read(fd, buf+got, n-got);
+        switch (res) {
+            case 0:
+                return got;
+            case -1:
+            {
+                auto e = errno;
+                if (EINTR != e) {
+                    throw std::system_error(errno, std::generic_category(), "pipe");
+                }
+                break;
+            }
+            default:
+                got += res;
+                break;
+        }
+    }
+    return got;
 }
