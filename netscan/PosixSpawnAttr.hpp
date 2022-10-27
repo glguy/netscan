@@ -23,6 +23,11 @@ public:
     auto operator= (PosixSpawnAttr const&) -> PosixSpawnAttr& = delete;
 
     auto setflags(short flags) -> void;
+    auto getflags() const -> short;
+
+    auto setpgroup(pid_t) -> void;
+    auto getpgroup() const -> pid_t;
+    
     auto get() const -> posix_spawnattr_t const*;
 };
 

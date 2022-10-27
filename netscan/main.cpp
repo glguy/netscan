@@ -49,14 +49,16 @@ auto pcap_setup(char const* const device) -> Pcap
     return p;
 }
 
-auto ping_range(in_addr_t address, in_addr_t netmask) -> void
+auto ping_range(in_addr_t address, in_addr_t netmask, int limit) -> void
 {
     auto start = ntohl(address);
     auto end   = ntohl(address | ~netmask);
 
-    PosixSpawnFileActions actions;
     PosixSpawnAttr attr;
+    attr.setflags(POSIX_SPAWN_SETPGROUP);
+    pid_t pgroup = 0;
 
+    PosixSpawnFileActions actions;
     actions.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
     actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
     actions.addopen(STDERR_FILENO, "/dev/null", O_WRONLY);
@@ -66,18 +68,28 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
     char arg2[] {"-c1"};
     char* args[] {arg0, arg1, arg2, nullptr, nullptr};
 
-    auto pids = std::vector<pid_t>();
+    int n = 0;
     for (auto addr : boost::irange(start+1, end)) {
         auto arg = std::to_string(addr);
         args[3] = arg.data(); // null-terminated since C++11
-        pids.push_back(PosixSpawnp("ping", actions, attr, args, nullptr));
+
+        auto pid = PosixSpawnp("ping", actions, attr, args, nullptr);
+        n++;
+
+        if (pgroup == 0) {
+            attr.setpgroup(pgroup = pid);
+        }
+
+        if (n > limit) {
+            auto [pid,_] = Wait(-pgroup);
+            n--;
+        }
     }
 
-    for (auto pid : pids) {
-        Wait(pid);
+    for (auto _ : boost::irange(0, n)) {
+        Wait(-pgroup);
     }
 }
-
 
 auto wait_ready(int fd) -> bool {
     char buffer;
@@ -150,7 +162,7 @@ auto main(int argc, char* argv[]) -> int
             return 1;
         }
 
-        ping_range(address, netmask);
+        ping_range(address, netmask, 50);
         std::this_thread::sleep_for(1s);
 
         Kill(pid, SIGUSR1);
