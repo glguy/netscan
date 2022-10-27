@@ -81,7 +81,7 @@ auto Close(int fd) -> void {
         if (-1 == res) {
             auto e = errno;
             if (EINTR != e) {
-                throw std::system_error(errno, std::generic_category(), "pipe");
+                throw std::system_error(e, std::generic_category(), "close");
             }
         } else {
             return;
@@ -100,7 +100,7 @@ auto WriteAll(int fd, char const* buf, size_t n) -> size_t {
             {
                 auto e = errno;
                 if (EINTR != e) {
-                    throw std::system_error(errno, std::generic_category(), "pipe");
+                    throw std::system_error(e, std::generic_category(), "write");
                 }
                 break;
             }
@@ -123,7 +123,7 @@ auto ReadAll(int fd, char* buf, size_t n) -> size_t {
             {
                 auto e = errno;
                 if (EINTR != e) {
-                    throw std::system_error(errno, std::generic_category(), "pipe");
+                    throw std::system_error(e, std::generic_category(), "read");
                 }
                 break;
             }
