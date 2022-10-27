@@ -29,6 +29,9 @@ auto Wait(pid_t pid, int options) -> std::tuple<pid_t, int> {
     }
 }
 
+/// Create a new process
+/// @return Process ID of child to parent or 0 to child.
+/// @exception std::system\_error
 auto Fork() -> pid_t {
     auto res = fork();
     if (-1 == res) {
@@ -37,6 +40,10 @@ auto Fork() -> pid_t {
     return res;
 }
 
+/// Send signal to a process
+/// @param pid target of signal
+/// @param sig signal number
+/// @exception std::system\_error
 auto Kill(pid_t pid, int sig) -> void {
     auto res = kill(pid, sig);
     if (-1 == res) {
@@ -66,6 +73,9 @@ auto Sigaction(int sig, struct sigaction const& act) -> struct sigaction {
     return old;
 }
 
+/// Create descriptor pair for interprocess communication
+/// @return pair of file descriptors
+/// @exception std::system\_error
 auto Pipe() -> Pipes {
     int pipes[2];
     auto res = pipe(pipes);
@@ -75,6 +85,9 @@ auto Pipe() -> Pipes {
     return {pipes[0], pipes[1]};
 }
 
+/// Delete a descriptor
+/// @param fd file descriptor to delete
+/// @exception std::system\_error
 auto Close(int fd) -> void {
     for(;;) {
         auto res = close(fd);
@@ -89,6 +102,13 @@ auto Close(int fd) -> void {
     }
 }
 
+/// Write as many bytes as possible to file descriptor until complete or
+/// file is closed.
+/// @param fd file descriptor
+/// @param buf buffer to write
+/// @params n size of buffer
+/// @return total bytes written
+/// @exception std::system\_error
 auto WriteAll(int fd, char const* buf, size_t n) -> size_t {
     size_t wrote = 0;
     while (wrote < n) {
@@ -112,6 +132,12 @@ auto WriteAll(int fd, char const* buf, size_t n) -> size_t {
     return wrote;
 }
 
+/// Read from a file descriptor until buffer is filled or file is empty.
+/// @param fd file descriptor
+/// @param buf buffer to fill
+/// @param n size of buffer
+/// @return total bytes read
+/// @exception std::system\_error
 auto ReadAll(int fd, char* buf, size_t n) -> size_t {
     size_t got = 0;
     while (got < n) {

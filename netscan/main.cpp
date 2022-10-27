@@ -80,14 +80,22 @@ auto ping_range(in_addr_t address, in_addr_t netmask, int limit) -> void
             attr.setpgroup(pgroup = pid);
         }
 
-        if (n > limit) {
-            auto [pid,_] = Wait(-pgroup);
+        while (n > 0) {
+            int flags = n >= limit ? 0 : WNOHANG;
+            auto [pid,_] = Wait(-pgroup, flags);
+            
+            if (pid == 0) { break; }
             n--;
+        }
+
+        if (n == 0) {
+            attr.setpgroup(pgroup = 0);
         }
     }
 
-    for (auto _ : boost::irange(0, n)) {
+    while (n > 0) {
         Wait(-pgroup);
+        n--;
     }
 }
 
@@ -110,14 +118,17 @@ auto PcapMain(char const* source, int fd) -> void {
 
     static pcap_t* raw;
     raw = pcap.get();
-    sigset_t sigset;
-    sigemptyset(&sigset);
-    LocalSignalHandler sigusr {SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset}};
+
+    struct sigaction act;
+    act.sa_handler = [](int){ pcap_breakloop(raw); };
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    LocalSignalHandler breaker {SIGUSR1, act};
 
     // Wait to signal ready until signal handler is installed
     send_ready(fd);
 
-    auto macs = std::unordered_set<std::string>{};
+    std::unordered_set<std::string> macs;
     pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
         if (11 < pkt_header->caplen) {
             auto mac = fmt::format(
@@ -131,45 +142,88 @@ auto PcapMain(char const* source, int fd) -> void {
     });
 }
 
-}
+struct options {
+    int spawn_limit = 50;
+    char const* device;
+    in_addr_t network;
+    in_addr_t netmask;
+};
 
+auto get_options(int argc, char** argv) -> options {
+    options o;
 
-
-auto main(int argc, char* argv[]) -> int
-{
-    if (argc != 4) {
-        std::cerr << "Usage: netscan interface network netmask" << std::endl;
-        return 1;
+    int ch;
+    while ((ch = getopt(argc, argv, "hl:")) != -1) {
+        switch (ch) {
+            default: throw std::invalid_argument("bad command-line flag");
+            case 'h':
+                std::cerr << "Usage: netscan [-l limit] interface network netmask" << std::endl;
+                exit(EXIT_SUCCESS);
+            case 'l':
+                o.spawn_limit = atoi(optarg);
+                if (o.spawn_limit <= 0) {
+                    throw std::invalid_argument("bad spawn limit");
+                }
+                break;
+        }
     }
 
+    argc -= optind;
+    argv += optind;
+
+    switch (argc) {
+        case 0: throw std::invalid_argument("interface argument missing");
+        case 1: throw std::invalid_argument("network argument missing");
+        case 2: throw std::invalid_argument("netmask argument missing");
+        case 3: break;
+        default: throw std::invalid_argument("too many arguments");
+    }
+
+    o.device = argv[0];
+    o.network = InAddrPton(argv[1]);
+    o.netmask = InAddrPton(argv[2]);
+
+    // Ensure network number has a zero host number part
+    if (o.network & ~o.netmask) {
+        throw std::invalid_argument("network and netmask mismatch");
+    }
+
+    return o;
+}
+
+}
+
+auto main(int argc, char** argv) -> int
+{
     try {
-        auto address = InAddrPton(argv[2]);
-        auto netmask = InAddrPton(argv[3]);
-        if (address & ~netmask) {
-            throw std::invalid_argument("network and netmask mismatch");
-        }
+        auto options = get_options(argc, argv);
 
+        // Create pcap capture loop process
         auto pipes = Pipe();
-        pid_t pid = Fork();
+        auto pid = Fork();
         if (0 == pid) {
-            close(pipes.read);
-            PcapMain(argv[1], pipes.write);
-            exit(EXIT_SUCCESS);
+            Close(pipes.read);
+            PcapMain(options.device, pipes.write);
+            return 0;
         }
 
+        // Wait for capture loop process to be ready
         Close(pipes.write);
         if (!wait_ready(pipes.read)) {
             return 1;
         }
 
-        ping_range(address, netmask, 50);
+        // Ping all the hosts on the network
+        ping_range(options.network, options.netmask, options.spawn_limit);
         std::this_thread::sleep_for(1s);
 
+        // Clean up the capture loop process
         Kill(pid, SIGUSR1);
         auto [_, status] = Wait(pid);
         if (!WIFEXITED(status) || WEXITSTATUS(status)) {
             return 1;
         }
+
     } catch (std::exception const& e) {
         std::cerr << "Failure: " << e.what() << std::endl;
         return 1;
