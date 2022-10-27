@@ -96,7 +96,8 @@ auto PcapMain(char const* source, int fd) -> void {
 
     auto pcap = pcap_setup(source);
 
-    static pcap_t* volatile raw = pcap.get();
+    static pcap_t* raw;
+    raw = pcap.get();
     sigset_t sigset;
     sigemptyset(&sigset);
     LocalSignalHandler sigusr {SIGUSR1, {*[](int) { pcap_breakloop(raw); }, sigset}};

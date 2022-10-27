@@ -19,8 +19,8 @@ public:
     LocalSignalHandler(int sig, struct sigaction const& act);
     LocalSignalHandler(LocalSignalHandler const&) = delete;
     LocalSignalHandler(LocalSignalHandler &&) = delete;
-    LocalSignalHandler& operator=(LocalSignalHandler const&) = delete;
-    LocalSignalHandler& operator=(LocalSignalHandler&&) = delete;
+    auto operator=(LocalSignalHandler const&) -> LocalSignalHandler& = delete;
+    auto operator=(LocalSignalHandler&&) -> LocalSignalHandler& = delete;
     ~LocalSignalHandler();
 };
 
