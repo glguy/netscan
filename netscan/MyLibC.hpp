@@ -14,7 +14,16 @@
 #include <cstddef>
 #include <tuple>
 
+
+/// Wait for process termination
+/// @param pid of process to wait for
+/// @param options Combination of WNOHANG and WUNTRACED
+/// @return pid of process and status information
 auto Wait(pid_t pid = 0, int options = 0) -> std::tuple<pid_t, int>;
+
+/// Create a new process
+/// @return pid of created process to parent and 0 to child
+/// @exception std::system\_error on failure
 auto Fork() -> pid_t;
 auto Kill(pid_t pid, int sig) -> void;
 auto InAddrPton(char const* str) -> in_addr_t;

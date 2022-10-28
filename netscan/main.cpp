@@ -1,3 +1,5 @@
+/// @mainpage Local network mac address scanner
+
 //
 //  main.cpp
 //  netscan
@@ -16,8 +18,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <iterator>
-#include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -40,6 +40,8 @@ using namespace std::chrono_literals;
 
 namespace {
 
+/// Construct a ping reply listener
+/// @param device name to listen on
 auto pcap_setup(char const* const device) -> Pcap
 {
     auto p = Pcap::open_live(device, 16, 0, 100ms);
@@ -49,6 +51,9 @@ auto pcap_setup(char const* const device) -> Pcap
     return p;
 }
 
+/// Invoke ping once for every address on the given network.
+/// @param address Network number
+/// @param netmask Network mask
 auto ping_range(in_addr_t address, in_addr_t netmask) -> void
 {
     auto start = ntohl(address);
@@ -66,7 +71,7 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
     char arg2[] {"-c1"};
     char* args[] {arg0, arg1, arg2, nullptr, nullptr};
 
-    auto pids = std::vector<pid_t>();
+    std::vector<pid_t> pids;
     for (auto addr : boost::irange(start+1, end)) {
         auto arg = std::to_string(addr);
         args[3] = arg.data(); // null-terminated since C++11
@@ -78,7 +83,9 @@ auto ping_range(in_addr_t address, in_addr_t netmask) -> void
     }
 }
 
-
+/// Wait until one byte is available to read on the given file descriptor
+/// @param fd file descriptor of read end of pipe
+/// @return true on success
 auto wait_ready(int fd) -> bool {
     char buffer;
     auto got = ReadAll(fd, &buffer, 1);
@@ -86,12 +93,16 @@ auto wait_ready(int fd) -> bool {
     return 1 == got;
 }
 
+/// Transmit a single byte to corresponding wait\_ready call
+/// @param fd file descriptor of write end of pipe
 auto send_ready(int fd) -> void {
     WriteAll(fd, "1", 1);
     Close(fd);
 }
 
-
+/// Main function for PCAP listener process
+/// @param source name of device to listen on
+/// @param fd file descriptor of pipe to signal when ready
 auto PcapMain(char const* source, int fd) -> void {
 
     auto pcap = pcap_setup(source);
@@ -105,7 +116,7 @@ auto PcapMain(char const* source, int fd) -> void {
     // Wait to signal ready until signal handler is installed
     send_ready(fd);
 
-    auto macs = std::unordered_set<std::string>{};
+    std::unordered_set<std::string> macs;
     pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
         if (11 < pkt_header->caplen) {
             auto mac = fmt::format(
@@ -121,8 +132,9 @@ auto PcapMain(char const* source, int fd) -> void {
 
 }
 
-
-
+/// Main function
+/// @param argc Command line argument count
+/// @param argv Command line arguments
 auto main(int argc, char* argv[]) -> int
 {
     if (argc != 4) {

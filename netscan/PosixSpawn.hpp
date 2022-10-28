@@ -13,7 +13,28 @@
 #include "PosixSpawnAttr.hpp"
 #include "PosixSpawnFileActions.hpp"
 
+
+/// Spawn a process (possibly using search path)
+/// @param path File path to executable
+/// @param actions spawn actions
+/// @param attr spawn attributes
+/// @param argv null-terminated argument array
+/// @param envp null-terminated environment array
 auto PosixSpawnp
+ (char const* path,
+  PosixSpawnFileActions const& actions,
+  PosixSpawnAttr const& attr,
+  char * const* argv,
+  char * const* envp
+  ) -> pid_t;
+
+/// Spawn a process (possibly using search path)
+/// @param path File path to executable
+/// @param actions spawn actions
+/// @param attr spawn attributes
+/// @param argv null-terminated argument array
+/// @param envp null-terminated environment array
+auto PosixSpawn
  (char const* path,
   PosixSpawnFileActions const& actions,
   PosixSpawnAttr const& attr,
