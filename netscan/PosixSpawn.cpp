@@ -6,7 +6,11 @@
 //
 
 #include "PosixSpawn.hpp"
+
 #include <system_error>
+
+#include "PosixSpawnAttr.hpp"
+#include "PosixSpawnFileActions.hpp"
 
 auto PosixSpawnp
  (char const* path,

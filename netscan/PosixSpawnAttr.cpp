@@ -7,6 +7,7 @@
 
 #include "PosixSpawnAttr.hpp"
 
+#include <cerrno>
 #include <system_error>
 
 PosixSpawnAttr::PosixSpawnAttr() {

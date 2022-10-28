@@ -10,7 +10,6 @@
 #include <boost/numeric/conversion/cast.hpp>
 
 #include <stdexcept>
-#include <type_traits>
 
 auto Pcap::PcapDelete::operator()(pcap_t* p) const noexcept -> void {
     pcap_close(p);

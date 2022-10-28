@@ -10,9 +10,8 @@
 
 #include <spawn.h>
 
-#include "PosixSpawnAttr.hpp"
-#include "PosixSpawnFileActions.hpp"
-
+class PosixSpawnFileActions;
+class PosixSpawnAttr;
 
 /// Spawn a process (possibly using search path)
 /// @param path File path to executable

@@ -10,8 +10,8 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <stdexcept>
 #include <system_error>
-#include <csignal>
 #include <unistd.h>
 
 auto Wait(pid_t pid, int options) -> std::tuple<pid_t, int> {

@@ -7,6 +7,7 @@
 
 #include "PosixSpawnFileActions.hpp"
 
+#include <cerrno>
 #include <system_error>
 
 PosixSpawnFileActions::PosixSpawnFileActions() {

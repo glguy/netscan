@@ -12,20 +12,15 @@
 #include <inttypes.h> // PRIu32
 #include <unistd.h> // STDOUT_FILENO STDERR_FILENO
 
-#include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
-#include <iterator>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <thread>
-#include <tuple>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 #include <boost/range/irange.hpp>
 #include <fmt/format.h>
@@ -35,6 +30,8 @@
 #include "MyLibC.hpp"
 #include "Pcap.hpp"
 #include "PosixSpawn.hpp"
+#include "PosixSpawnFileActions.hpp"
+#include "PosixSpawnAttr.hpp"
 
 using namespace std::chrono_literals;
 

@@ -8,8 +8,6 @@
 #ifndef Pcap_hpp
 #define Pcap_hpp
 
-#include "BpfProgram.hpp"
-
 #include <chrono>
 #include <concepts>
 #include <memory>
@@ -17,6 +15,8 @@
 #include <tuple>
 
 #include <pcap/pcap.h>
+
+#include "BpfProgram.hpp"
 
 //! Wrapper class for pcap_t
 class Pcap {
