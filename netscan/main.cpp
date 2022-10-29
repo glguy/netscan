@@ -12,6 +12,7 @@
 #include <inttypes.h> // PRIu32
 #include <unistd.h> // STDOUT_FILENO STDERR_FILENO
 
+#include <atomic>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -126,7 +127,8 @@ auto PcapMain(char const* source, int fd) -> void {
 
     auto pcap = pcap_setup(source);
 
-    static pcap_t* volatile raw;
+    static std::atomic<pcap_t*> raw;
+    static_assert(decltype(raw)::is_always_lock_free); // requirement for signal handler
     raw = pcap.get();
 
     struct sigaction act;
