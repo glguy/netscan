@@ -44,13 +44,11 @@ public:
     /// @exception std::runtime\_error filter program compile failure
     auto compile(char const* str, bool optimize, bpf_u_int32 netmask) -> BpfProgram;
 
-    
     /// set the filter
     /// @param program  filter program
     auto setfilter(BpfProgram* program) -> void;
 
     auto dispatch(int cnt, pcap_handler callback, u_char *user) -> int;
-    auto loop(int cnt, pcap_handler callback, u_char *user) -> int;
     auto fileno() const -> int;
     auto next() -> std::optional<std::pair<pcap_pkthdr*, u_char const*>>;
     auto selectable_fd() -> int;
@@ -67,6 +65,17 @@ public:
         }, const_cast<u_char*>(reinterpret_cast<u_char const*>(&callback)));
     }
 
+    /// Process packets from a live capture of savefile until limit is reached
+    /// or end of file or breakloop is called.
+    /// @param cnt Maximum packets to process or 0 for infinity
+    /// @param callback used for each packet
+    /// @param user closure data passed to each callback invocation
+    auto loop(int cnt, pcap_handler callback, u_char *user) -> int;
+
+    /// Process packets from a live capture of savefile until limit is reached
+    /// or end of file or breakloop is called.
+    /// @param cnt Maximum packets to process or 0 for infinity
+    /// @param callback used for each packet
     template <std::invocable<pcap_pkthdr*, u_char const*> Callback>
     auto loop(int cnt, Callback const& callback) -> int {
         return loop(cnt, [](auto fp, auto header, auto data) {

@@ -24,6 +24,7 @@
 #include <utility>
 
 #include <boost/range/irange.hpp>
+#include <boost/program_options.hpp>
 #include <fmt/format.h>
 #include <pcap/pcap.h>
 
@@ -120,28 +121,30 @@ auto send_ready(int fd) -> void {
     Close(fd);
 }
 
+auto breakloop_sigaction(pcap_t* p) -> struct sigaction {
+    static std::atomic<pcap_t*> raw;
+    static_assert(decltype(raw)::is_always_lock_free); // requirement for signal handler
+    raw = p;
+
+    struct sigaction act;
+    act.sa_handler = [](auto){ pcap_breakloop(raw); };
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+
+    return act;
+}
+
 /// Main function for PCAP listener process
 /// @param source name of device to listen on
 /// @param fd file descriptor of pipe to signal when ready
-auto PcapMain(char const* source, int fd) -> void {
+auto PcapMain(std::string const& source, int fd) -> void {
 
-    auto pcap = pcap_setup(source);
-
-    static std::atomic<pcap_t*> raw;
-    static_assert(decltype(raw)::is_always_lock_free); // requirement for signal handler
-    raw = pcap.get();
-
-    struct sigaction act;
-    act.sa_handler = [](int){ pcap_breakloop(raw); };
-    act.sa_flags = 0;
-    sigemptyset(&act.sa_mask);
-    LocalSignalHandler breaker {SIGUSR1, act};
-
-    // Wait to signal ready until signal handler is installed
+    auto pcap = pcap_setup(source.c_str());
+    LocalSignalHandler breaker {SIGUSR1, breakloop_sigaction(pcap.get())};
     send_ready(fd);
 
     std::unordered_set<std::string> macs;
-    pcap.loop(0, [&macs](auto pkt_header, auto pkt_data) {
+    auto body = [&macs](auto pkt_header, auto pkt_data) {
         if (11 < pkt_header->caplen) {
             auto mac = fmt::format(
                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
@@ -151,54 +154,58 @@ auto PcapMain(char const* source, int fd) -> void {
                 std::cout << mac << std::endl;
             }
         }
-    });
+    };
+
+    pcap.loop(0, body);
+    pcap.dispatch(0, body); // finish the rest of the buffer after a break
+}
+
+struct ipv4_argument {
+    in_addr_t value;
+};
+
+auto validate(boost::any& v, std::vector<std::string> const& values, ipv4_argument*, int) -> void {
+    namespace po = boost::program_options;
+    po::validators::check_first_occurrence(v);
+    auto const& s = po::validators::get_single_string(values);
+    if (auto a = InAddrPton(s.c_str())) {
+        v = boost::any(ipv4_argument{*a});
+    } else {
+        throw po::validation_error(po::validation_error::invalid_option_value);
+    }
 }
 
 struct options {
-    int spawn_limit = 50;
-    char const* device;
-    in_addr_t network;
-    in_addr_t netmask;
+    int spawn_limit;
+    std::string device;
+    ipv4_argument network;
+    ipv4_argument netmask;
 };
 
 auto get_options(int argc, char** argv) -> options {
+    namespace po = boost::program_options;
     options o;
 
-    int ch;
-    while ((ch = getopt(argc, argv, "hl:")) != -1) {
-        switch (ch) {
-            default: throw std::invalid_argument("bad command-line flag");
-            case 'h':
-                std::cerr << "Usage: netscan [-l limit] interface network netmask" << std::endl;
-                exit(EXIT_SUCCESS);
-            case 'l':
-                o.spawn_limit = atoi(optarg);
-                if (o.spawn_limit <= 0) {
-                    throw std::invalid_argument("bad spawn limit");
-                }
-                break;
-        }
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help", "produce help message")
+        ("limit,l", po::value(&o.spawn_limit)->default_value(50), "concurrent process spawn limit")
+        ("device",  po::value(&o.device)->required(), "libpcap capture device")
+        ("network", po::value(&o.network)->required(), "network number")
+        ("netmask", po::value(&o.netmask)->required(), "network mask");
+
+    po::positional_options_description p;
+    p.add("device", 1).add("network", 1).add("netmask", 1);
+
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+
+    if (vm.count("help")) {
+        std::cout << desc << std::endl;
+        exit(EXIT_SUCCESS);
     }
 
-    argc -= optind;
-    argv += optind;
-
-    switch (argc) {
-        case 0: throw std::invalid_argument("interface argument missing");
-        case 1: throw std::invalid_argument("network argument missing");
-        case 2: throw std::invalid_argument("netmask argument missing");
-        case 3: break;
-        default: throw std::invalid_argument("too many arguments");
-    }
-
-    o.device = argv[0];
-    o.network = InAddrPton(argv[1]);
-    o.netmask = InAddrPton(argv[2]);
-
-    // Ensure network number has a zero host number part
-    if (o.network & ~o.netmask) {
-        throw std::invalid_argument("network and netmask mismatch");
-    }
+    po::notify(vm);
 
     return o;
 }
@@ -229,7 +236,7 @@ auto main(int argc, char** argv) -> int
         }
 
         // Ping all the hosts on the network
-        ping_range(options.network, options.netmask, options.spawn_limit);
+        ping_range(options.network.value, options.netmask.value, options.spawn_limit);
         std::this_thread::sleep_for(1s);
 
         // Clean up the capture loop process

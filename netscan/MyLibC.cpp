@@ -51,16 +51,16 @@ auto Kill(pid_t pid, int sig) -> void {
     }
 }
 
-auto InAddrPton(char const* str) -> in_addr_t
+auto InAddrPton(char const* str) -> std::optional<in_addr_t>
 {
     in_addr_t addr;
     switch (inet_pton(AF_INET, str, &addr)) {
         case 0:
-            throw std::invalid_argument("bad inet address");
+            return {};
         case -1:
             throw std::system_error(errno, std::generic_category(), "inet_pton");
         default:
-            return addr;
+            return {addr};
     }
 }
 

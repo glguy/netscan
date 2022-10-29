@@ -1,5 +1,5 @@
 pkg_check_modules(FMT  REQUIRED IMPORTED_TARGET fmt)
-find_package(Boost)
+find_package(Boost REQUIRED COMPONENTS program_options)
 
 if(APPLE)
         find_library(PCAP libpcap.tbd REQUIRED)
@@ -12,7 +12,7 @@ add_executable(netscan
     BpfProgram.cpp Pcap.cpp PosixSpawnFileActions.cpp LocalSignalHandler.cpp
     PosixSpawn.cpp main.cpp MyLibC.cpp PosixSpawnAttr.cpp)
 
-target_link_libraries(netscan PRIVATE PkgConfig::FMT Boost::headers)
+target_link_libraries(netscan PRIVATE PkgConfig::FMT Boost::headers Boost::program_options)
 
 if(APPLE)
     find_library(PCAP libpcap.tbd REQUIRED)
