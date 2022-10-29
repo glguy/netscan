@@ -56,3 +56,35 @@ auto PosixSpawnAttr::getpgroup() const -> pid_t {
     }
     return pgroup;
 }
+
+auto PosixSpawnAttr::setsigdefault(sigset_t sigset) -> void {
+    auto e = posix_spawnattr_setsigdefault(&_raw, &sigset);
+    if (0 != e) {
+        throw std::system_error(e, std::generic_category(), "posix_spawnattr_setsigdefault");
+    }
+}
+
+auto PosixSpawnAttr::getsigdefault() const -> sigset_t {
+    sigset_t sigset;
+    auto e = posix_spawnattr_getsigdefault(&_raw, &sigset);
+    if (0 != e) {
+        throw std::system_error(e, std::generic_category(), "posix_spawnattr_getsigdefault");
+    }
+    return sigset;
+}
+
+auto PosixSpawnAttr::setsigmask(sigset_t sigset) -> void {
+    auto e = posix_spawnattr_setsigmask(&_raw, &sigset);
+    if (0 != e) {
+        throw std::system_error(e, std::generic_category(), "posix_spawnattr_setsigmask");
+    }
+}
+
+auto PosixSpawnAttr::getsigmask() const -> sigset_t {
+    sigset_t sigset;
+    auto e = posix_spawnattr_getsigmask(&_raw, &sigset);
+    if (0 != e) {
+        throw std::system_error(e, std::generic_category(), "posix_spawnattr_getsigmask");
+    }
+    return sigset;
+}

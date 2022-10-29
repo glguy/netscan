@@ -126,7 +126,7 @@ auto PcapMain(char const* source, int fd) -> void {
 
     auto pcap = pcap_setup(source);
 
-    static pcap_t* raw;
+    static pcap_t* volatile raw;
     raw = pcap.get();
 
     struct sigaction act;

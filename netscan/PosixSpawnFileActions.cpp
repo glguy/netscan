@@ -35,6 +35,13 @@ auto PosixSpawnFileActions::addclose(int filedes) -> void {
     }
 }
 
+auto PosixSpawnFileActions::adddup2(int filedes, int newfiledes) -> void {
+    int res = posix_spawn_file_actions_adddup2(&_raw, filedes, newfiledes);
+    if (0 != res) {
+        throw std::system_error(errno, std::generic_category(), "posix_spawn_file_actions_adddup2");
+    }
+}
+
 auto PosixSpawnFileActions::get() const -> posix_spawn_file_actions_t const* {
     return &_raw;
 }

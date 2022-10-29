@@ -24,6 +24,7 @@ public:
 
     auto addopen(int filedes, char const* path, int flags, mode_t mode = 0) -> void;
     auto addclose(int filedes) -> void;
+    auto adddup2(int filedes, int newfiledes) -> void;
     auto get() const -> posix_spawn_file_actions_t const*;
 };
 #endif /* PosixSpawnFileActions_hpp */
