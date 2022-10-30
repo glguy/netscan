@@ -14,7 +14,7 @@
 #include <system_error>
 #include <unistd.h>
 
-auto Wait(pid_t pid, int options) -> std::tuple<pid_t, int> {
+auto Wait(pid_t pid, int options) -> std::pair<pid_t, int> {
     for (;;) {
         int stat;
         auto res = waitpid(pid, &stat, options);

@@ -62,7 +62,7 @@ auto Pcap::next() -> std::optional<std::pair<pcap_pkthdr*, u_char const*>> {
 }
 
 auto Pcap::selectable_fd() -> int {
-    return pcap_get_selectable_fd(_pcap.get());
+    return checked(pcap_get_selectable_fd(_pcap.get()));
 }
 
 auto Pcap::required_select_timeout() -> timeval const* {
