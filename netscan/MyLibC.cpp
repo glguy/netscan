@@ -12,7 +12,8 @@
 #include <cerrno>
 #include <stdexcept>
 #include <system_error>
-#include <unistd.h>
+
+#include <boost/numeric/conversion/cast.hpp>
 
 auto Wait(pid_t pid, int options) -> std::pair<pid_t, int> {
     for (;;) {
@@ -159,4 +160,15 @@ auto ReadAll(int fd, char* buf, size_t n) -> size_t {
         }
     }
     return got;
+}
+
+auto Poll(pollfd pollfds[], nfds_t n, std::optional<std::chrono::milliseconds> timeout) -> int {
+    auto res = poll(pollfds, n, timeout ? boost::numeric_cast<int>(timeout->count()) : -1);
+    if (-1 == res) {
+        auto e = errno;
+        if (EINTR != e) {
+            throw std::system_error(e, std::generic_category(), "poll");
+        }
+    }
+    return res;
 }

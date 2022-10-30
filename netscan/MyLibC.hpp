@@ -10,6 +10,7 @@
 
 #include <arpa/inet.h>
 #include <sys/wait.h>
+#include <poll.h>
 
 #include <csignal>
 #include <cstddef>
@@ -21,7 +22,7 @@
 /// @param pid of process to wait for
 /// @param options Combination of WNOHANG and WUNTRACED
 /// @return pid of process and status information
-auto Wait(pid_t pid = 0, int options = 0) -> std::pair<pid_t, int>;
+auto Wait(pid_t pid = -1, int options = 0) -> std::pair<pid_t, int>;
 
 /// Create a new process
 /// @return pid of created process to parent and 0 to child
@@ -38,5 +39,18 @@ struct Pipes {
 };
 
 auto Pipe() -> Pipes;
+
+/// Poll an array of file descriptors.
+/// @param pollfds array of pollfds
+/// @param n length of array
+/// @param timeout milliseconds to wait or empty for indefinite
+/// @return Number of ready descriptors or -1 on signal interrupt
+/// @exception std::system\_error
+auto Poll(pollfd pollfds[], nfds_t n, std::optional<std::chrono::milliseconds> timeout) -> int;
+
+template <std::size_t N>
+auto Poll(pollfd (&pollfds)[N], std::optional<std::chrono::milliseconds> timeout) -> int {
+    return Poll(pollfds, N, timeout);
+}
 
 #endif /* MyLibC_hpp */
