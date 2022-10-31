@@ -7,10 +7,16 @@
 //  Created by Eric Mertens on 10/5/22.
 //
 
+#include <csignal>
 #include <spawn.h> // posix_spawn
 #include <fcntl.h> // O_WRONLY
 #include <poll.h> // poll
+#include <thread>
 #include <unistd.h> // STDOUT_FILENO STDIN_FILENO
+
+#include <sys/types.h>
+#include <sys/event.h>
+#include <sys/time.h>
 
 #include <chrono>
 #include <cstdlib>
@@ -116,22 +122,6 @@ public:
     }
 };
 
-class TimeoutLogic {
-    std::optional<ch::steady_clock::time_point> cutoff;
-public:
-    auto timeout(bool hasKids) -> ch::milliseconds {
-        std::optional<ch::milliseconds> timeout;
-        if (cutoff) {
-            return std::max(0ms, ch::round<ch::milliseconds>(*cutoff - ch::steady_clock::now()));
-        } else if (hasKids) {
-            return 500ms; // gives some child processes time to terminate
-        } else {
-            cutoff = ch::steady_clock::now() + 1s;
-            return 1s;
-        }
-    }
-};
-
 class SpawnLogic {
     PosixSpawnAttr attr;
     PosixSpawnFileActions actions;
@@ -153,6 +143,27 @@ public:
     }
 };
 
+auto Kqueue() -> int {
+    auto kq = kqueue();
+    if (-1 == kq) {
+        throw std::system_error(errno, std::generic_category(), "kqueue");
+    }
+    return kq;
+}
+
+auto Kevent(
+    int kq,
+    const struct kevent *changelist, int nchanges,
+    struct kevent *eventlist, int nevents,
+    const struct timespec *timeout) -> int
+{
+    auto res = kevent(kq, changelist, nchanges, eventlist, nevents, timeout);
+    if (-1 == res) {
+        throw std::system_error(errno, std::generic_category(), "kevent");
+    }
+    return res;
+}
+
 } // namespace
 
 /// Main function
@@ -171,23 +182,49 @@ auto main(int argc, char** argv) -> int
         auto kids = 0;
 
         PacketLogic packetLogic;
-        TimeoutLogic timeoutLogic;
         SpawnLogic spawnLogic;
 
-        for(;;) {
-            while (kids && Wait(-1, WNOHANG).first) { kids--; }
+        std::function pcap_cb = [&pcap, &packetLogic](){
+            pcap.dispatch(0, packetLogic);
+            return false;
+        };
 
+        std::function wait_cb = [&kids](){
+            while (kids > 0 && Wait(-1, WNOHANG).first) { kids--; }
+            return false;
+        };
+
+        std::function finish_cb = [](){
+            return true;
+        };
+
+        auto kq = Kqueue();
+        struct kevent evs[2];
+        EV_SET(&evs[0], pcap.selectable_fd(), EVFILT_READ, EV_ADD, 0, 0, &pcap_cb);
+        EV_SET(&evs[1], SIGCHLD, EVFILT_SIGNAL, EV_ADD, 0, 0, &wait_cb);
+        Kevent(kq, evs, 2, nullptr, 0, nullptr);
+
+        for(;;) {
             while (kids < options.spawn_limit && addr < end) {
                 spawnLogic.spawn(addr);
                 kids++;
                 addr++;
             }
 
-            switch (Poll(pollfds, timeoutLogic.timeout(kids))) {
-            case 0: if (0 == kids) { return 0; } else { break; };
-            case 1: pcap.dispatch(0, packetLogic);
+            if (0 == kids && addr == end) {
+                EV_SET(&evs[0], 0, EVFILT_TIMER, EV_ADD, 1, NOTE_SECONDS, &finish_cb);
+                EV_SET(&evs[1], SIGCHLD, EVFILT_SIGNAL, EV_DELETE, 0, 0, nullptr);
+                Kevent(kq, evs, 2, nullptr, 0, nullptr);
+                kids = -1;
+            }
+
+            auto event_n = Kevent(kq, nullptr, 0, evs, 2, nullptr);
+            for (int i = 0; i < event_n; i++) {
+                auto f = reinterpret_cast<std::function<bool()>*>(evs[i].udata);
+                if ((*f)()) { goto done; }
             }
         }
+done:   Close(kq);
 
     } catch (std::exception const& e) {
         std::cerr << "Failure: " << e.what() << std::endl;
