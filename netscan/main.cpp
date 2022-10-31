@@ -7,6 +7,7 @@
 //  Created by Eric Mertens on 10/5/22.
 //
 
+#include <csignal>
 #include <spawn.h> // posix_spawn
 #include <fcntl.h> // O_WRONLY
 #include <poll.h> // poll
@@ -119,12 +120,12 @@ public:
 class TimeoutLogic {
     std::optional<ch::steady_clock::time_point> cutoff;
 public:
-    auto timeout(bool hasKids) -> ch::milliseconds {
+    auto timeout(bool hasKids) -> std::optional<ch::milliseconds> {
         std::optional<ch::milliseconds> timeout;
         if (cutoff) {
             return std::max(0ms, ch::round<ch::milliseconds>(*cutoff - ch::steady_clock::now()));
         } else if (hasKids) {
-            return 500ms; // gives some child processes time to terminate
+            return {};
         } else {
             cutoff = ch::steady_clock::now() + 1s;
             return 1s;
@@ -151,7 +152,15 @@ public:
         args[3] = arg.data(); // null-terminated since C++11
         PosixSpawnp("ping", actions, attr, args, nullptr);
     }
+
 };
+
+static volatile sig_atomic_t sigchld_in;
+extern "C" auto reaper(int) -> void {
+    char buffer[] {0};
+    write(sigchld_in, buffer, 1);
+}
+
 
 } // namespace
 
@@ -164,7 +173,11 @@ auto main(int argc, char** argv) -> int
         auto options = get_options(argc, argv);
         auto pcap = pcap_setup(options.device);
 
-        pollfd pollfds[] {{pcap.selectable_fd(), POLLIN}};
+        auto pipes = Pipe();
+        sigchld_in = pipes.write;
+        Sigaction(SIGCHLD, {reaper, 0, SA_NOCLDSTOP | SA_RESETHAND});
+
+        pollfd pollfds[] {{pcap.selectable_fd(), POLLIN}, pipes.read, POLLIN};
 
         auto addr = ntohl(options.network.value) + 1;
         auto end = ntohl(options.network.value | ~options.netmask.value);
@@ -175,7 +188,6 @@ auto main(int argc, char** argv) -> int
         SpawnLogic spawnLogic;
 
         for(;;) {
-            while (kids && Wait(-1, WNOHANG).first) { kids--; }
 
             while (kids < options.spawn_limit && addr < end) {
                 spawnLogic.spawn(addr);
@@ -183,9 +195,19 @@ auto main(int argc, char** argv) -> int
                 addr++;
             }
 
-            switch (Poll(pollfds, timeoutLogic.timeout(kids))) {
-            case 0: if (0 == kids) { return 0; } else { break; };
-            case 1: pcap.dispatch(0, packetLogic);
+            auto events = Poll(pollfds, timeoutLogic.timeout(kids));
+            if (events == 0) {
+                return 0;
+            } else {
+                if (pollfds[0].revents & POLLIN) {
+                    pcap.dispatch(0, packetLogic);
+                }
+                if (pollfds[1].revents & POLLIN) {
+                    char buffer[1];
+                    read(pipes.read, &buffer, 1);
+                    Sigaction(SIGCHLD, {reaper, 0, SA_NOCLDSTOP | SA_RESETHAND});
+                    while (kids && Wait(-1, WNOHANG).first) { kids--; }
+                }
             }
         }
 
