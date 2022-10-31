@@ -7,6 +7,7 @@
 //  Created by Eric Mertens on 10/5/22.
 //
 
+#include <atomic>
 #include <csignal>
 #include <spawn.h> // posix_spawn
 #include <fcntl.h> // O_WRONLY
@@ -155,12 +156,46 @@ public:
 
 };
 
-static volatile sig_atomic_t sigchld_in;
-extern "C" auto reaper(int) -> void {
-    char buffer[] {0};
-    write(sigchld_in, buffer, 1);
-}
+class SigchldLogic {
+    int read_fd;
+    static std::atomic<int> write_fd;
+    static_assert(decltype(write_fd)::is_always_lock_free); // requirement for use from a signal handler
 
+    static auto cb(int) -> void {
+        char buffer[] {0};
+        write(write_fd, buffer, 1);
+    }
+
+public:
+    SigchldLogic() {
+        auto pipes = Pipe();
+        write_fd = pipes.write;
+        read_fd = pipes.read;
+        start();
+    }
+
+    ~SigchldLogic() {
+        Sigaction(SIGCHLD, {SIG_DFL});
+        Close(read_fd);
+        Close(write_fd);
+    }
+
+    auto resume() const -> void {
+        char buffer[1];
+        read(read_fd, buffer, 1);
+        start();
+    }
+
+    auto start() const -> void {
+        Sigaction(SIGCHLD, {cb, 0, SA_NOCLDSTOP | SA_RESETHAND});
+    }
+
+    auto selectable_fd() const -> int {
+        return read_fd;
+    }
+};
+
+std::atomic<int> SigchldLogic::write_fd;
 
 } // namespace
 
@@ -173,12 +208,6 @@ auto main(int argc, char** argv) -> int
         auto options = get_options(argc, argv);
         auto pcap = pcap_setup(options.device);
 
-        auto pipes = Pipe();
-        sigchld_in = pipes.write;
-        Sigaction(SIGCHLD, {reaper, 0, SA_NOCLDSTOP | SA_RESETHAND});
-
-        pollfd pollfds[] {{pcap.selectable_fd(), POLLIN}, pipes.read, POLLIN};
-
         auto addr = ntohl(options.network.value) + 1;
         auto end = ntohl(options.network.value | ~options.netmask.value);
         auto kids = 0;
@@ -186,9 +215,10 @@ auto main(int argc, char** argv) -> int
         PacketLogic packetLogic;
         TimeoutLogic timeoutLogic;
         SpawnLogic spawnLogic;
+        SigchldLogic sigchldLogic;
 
+        pollfd pollfds[] {{pcap.selectable_fd(), POLLIN}, sigchldLogic.selectable_fd(), POLLIN};
         for(;;) {
-
             while (kids < options.spawn_limit && addr < end) {
                 spawnLogic.spawn(addr);
                 kids++;
@@ -198,16 +228,13 @@ auto main(int argc, char** argv) -> int
             auto events = Poll(pollfds, timeoutLogic.timeout(kids));
             if (events == 0) {
                 return 0;
-            } else {
-                if (pollfds[0].revents & POLLIN) {
-                    pcap.dispatch(0, packetLogic);
-                }
-                if (pollfds[1].revents & POLLIN) {
-                    char buffer[1];
-                    read(pipes.read, &buffer, 1);
-                    Sigaction(SIGCHLD, {reaper, 0, SA_NOCLDSTOP | SA_RESETHAND});
-                    while (kids && Wait(-1, WNOHANG).first) { kids--; }
-                }
+            }
+            if (pollfds[0].revents & POLLIN) {
+                pcap.dispatch(0, packetLogic);
+            }
+            if (pollfds[1].revents & POLLIN) {
+                sigchldLogic.resume();
+                while (kids && Wait(-1, WNOHANG).first) { kids--; }
             }
         }
 
