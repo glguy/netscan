@@ -100,7 +100,7 @@ auto get_options(int argc, char** argv) -> options {
 }
 
 // Logic to be applied to each of the packets
-class Processor {
+class PacketLogic {
     std::unordered_set<std::string> macs;
 public:
     auto operator()(auto pkt_header, auto pkt_data) -> void {
@@ -116,7 +116,42 @@ public:
     }
 };
 
-extern "C" auto null_handler(int) -> void {}
+class TimeoutLogic {
+    std::optional<ch::steady_clock::time_point> cutoff;
+public:
+    auto timeout(bool hasKids) -> ch::milliseconds {
+        std::optional<ch::milliseconds> timeout;
+        if (cutoff) {
+            return std::max(0ms, ch::round<ch::milliseconds>(*cutoff - ch::steady_clock::now()));
+        } else if (hasKids) {
+            return 500ms; // gives some child processes time to terminate
+        } else {
+            cutoff = ch::steady_clock::now() + 1s;
+            return 1s;
+        }
+    }
+};
+
+class SpawnLogic {
+    PosixSpawnAttr attr;
+    PosixSpawnFileActions actions;
+    char arg0[5] {"ping"};
+    char arg1[4] {"-W1"};
+    char arg2[4] {"-c1"};
+    char* args[5] {arg0, arg1, arg2, nullptr, nullptr};
+
+public:
+    SpawnLogic() {
+        actions.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
+        actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
+    }
+
+    auto spawn(uint32_t addr) {
+        auto arg = std::to_string(addr);
+        args[3] = arg.data(); // null-terminated since C++11
+        PosixSpawnp("ping", actions, attr, args, nullptr);
+    }
+};
 
 } // namespace
 
@@ -126,51 +161,31 @@ extern "C" auto null_handler(int) -> void {}
 auto main(int argc, char** argv) -> int
 {
     try {
-        // generates interrupts to break out of poll
-        Sigaction(SIGCHLD, {null_handler, 0, SA_NOCLDSTOP});
-
         auto options = get_options(argc, argv);
         auto pcap = pcap_setup(options.device);
-
-        PosixSpawnAttr attr;
-        PosixSpawnFileActions actions;
-        actions.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
-        actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
-
-        char arg0[] {"ping"}, arg1[] {"-W1"}, arg2[] {"-c1"};
-        char* args[] {arg0, arg1, arg2, nullptr, nullptr};
 
         pollfd pollfds[] {{pcap.selectable_fd(), POLLIN}};
 
         auto addr = ntohl(options.network.value) + 1;
         auto end = ntohl(options.network.value | ~options.netmask.value);
-        int kids = 0;
+        auto kids = 0;
 
-        Processor processor;
+        PacketLogic packetLogic;
+        TimeoutLogic timeoutLogic;
+        SpawnLogic spawnLogic;
 
-        std::optional<ch::steady_clock::time_point> cutoff;
         for(;;) {
             while (kids && Wait(-1, WNOHANG).first) { kids--; }
 
             while (kids < options.spawn_limit && addr < end) {
-                auto arg = std::to_string(addr);
-                args[3] = arg.data(); // null-terminated since C++11
-                PosixSpawnp("ping", actions, attr, args, nullptr);
+                spawnLogic.spawn(addr);
                 kids++;
                 addr++;
             }
 
-            std::optional<ch::milliseconds> timeout;
-            if (cutoff) {
-                timeout = std::max(0ms, ch::round<ch::milliseconds>(*cutoff - ch::steady_clock::now()));
-            } else if (0 == kids) {
-                cutoff = ch::steady_clock::now() + 1s;
-                timeout = 1s;
-            }
-
-            switch (Poll(pollfds, timeout)) {
-            case 0: return 0;
-            case 1: pcap.dispatch(0, processor);
+            switch (Poll(pollfds, timeoutLogic.timeout(kids))) {
+            case 0: if (0 == kids) { return 0; } else { break; };
+            case 1: pcap.dispatch(0, packetLogic);
             }
         }
 
