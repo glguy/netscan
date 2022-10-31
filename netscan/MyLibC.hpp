@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <poll.h>
 
+#include <chrono>
 #include <csignal>
 #include <cstddef>
 #include <optional>
