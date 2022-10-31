@@ -122,11 +122,10 @@ class TimeoutLogic {
     std::optional<ch::steady_clock::time_point> cutoff;
 public:
     auto timeout(bool hasKids) -> std::optional<ch::milliseconds> {
-        std::optional<ch::milliseconds> timeout;
-        if (cutoff) {
-            return std::max(0ms, ch::round<ch::milliseconds>(*cutoff - ch::steady_clock::now()));
-        } else if (hasKids) {
+        if (hasKids) {
             return {};
+        } else if (cutoff) {
+            return std::max(0ms, ch::round<ch::milliseconds>(*cutoff - ch::steady_clock::now()));
         } else {
             cutoff = ch::steady_clock::now() + 1s;
             return 1s;
