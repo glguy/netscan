@@ -13,6 +13,7 @@
 #include <fcntl.h> // O_WRONLY
 #include <poll.h> // poll
 #include <unistd.h> // STDOUT_FILENO STDIN_FILENO
+#include <fcntl.h>
 
 #include <chrono>
 #include <cstdlib>
@@ -101,6 +102,10 @@ auto get_options(int argc, char** argv) -> options {
     return o;
 }
 
+auto set_cloexec(int fd) {
+    FcntlSetFd(fd, FD_CLOEXEC |  FcntlGetFd(fd));
+}
+
 // Logic to be applied to each of the packets
 class PacketLogic {
     std::unordered_set<std::string> macs;
@@ -142,7 +147,7 @@ class SpawnLogic {
     char* args[5] {arg0, arg1, arg2, nullptr, nullptr};
 
 public:
-    SpawnLogic() {
+    SpawnLogic(Pcap const& pcap) {
         actions.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
         actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
     }
@@ -168,6 +173,10 @@ class SigchldLogic {
 public:
     SigchldLogic() {
         auto pipes = Pipe();
+
+        set_cloexec(pipes.write);
+        set_cloexec(pipes.read);
+
         write_fd = pipes.write;
         read_fd = pipes.read;
         start();
@@ -206,6 +215,7 @@ auto main(int argc, char** argv) -> int
     try {
         auto options = get_options(argc, argv);
         auto pcap = pcap_setup(options.device);
+        set_cloexec(pcap.fileno());
 
         auto addr = ntohl(options.network.value) + 1;
         auto end = ntohl(options.network.value | ~options.netmask.value);
@@ -213,7 +223,7 @@ auto main(int argc, char** argv) -> int
 
         PacketLogic packetLogic;
         TimeoutLogic timeoutLogic;
-        SpawnLogic spawnLogic;
+        SpawnLogic spawnLogic(pcap);
         SigchldLogic sigchldLogic;
 
         pollfd pollfds[] {{pcap.selectable_fd(), POLLIN}, sigchldLogic.selectable_fd(), POLLIN};

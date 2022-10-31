@@ -8,6 +8,7 @@
 #include "MyLibC.hpp"
 
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <cerrno>
 #include <stdexcept>
@@ -169,6 +170,21 @@ auto Poll(pollfd pollfds[], nfds_t n, std::optional<std::chrono::milliseconds> t
         if (EINTR != e) {
             throw std::system_error(e, std::generic_category(), "poll");
         }
+    }
+    return res;
+}
+
+auto FcntlSetFd(int fd, int arg) -> void {
+    auto res = fcntl(fd, F_SETFD, arg);
+    if (-1 == res) {
+        throw std::system_error(errno, std::generic_category(), "fcntl");
+    }
+}
+
+auto FcntlGetFd(int fd) -> int {
+    auto res = fcntl(fd, F_GETFD, 0);
+    if (-1 == res) {
+        throw std::system_error(errno, std::generic_category(), "fcntl");
     }
     return res;
 }

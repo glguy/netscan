@@ -53,4 +53,8 @@ auto Poll(pollfd (&pollfds)[N], std::optional<std::chrono::milliseconds> timeout
     return Poll(pollfds, N, timeout);
 }
 
+auto FcntlSetFd(int fd, int arg) -> void;
+auto FcntlGetFd(int fd) -> int;
+
+
 #endif /* MyLibC_hpp */
