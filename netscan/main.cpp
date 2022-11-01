@@ -9,11 +9,14 @@
 
 #include <atomic>
 #include <csignal>
+#include <limits>
 #include <spawn.h> // posix_spawn
 #include <fcntl.h> // O_WRONLY
 #include <poll.h> // poll
 #include <unistd.h> // STDOUT_FILENO STDIN_FILENO
 #include <fcntl.h>
+
+#include <sys/select.h>
 
 #include <chrono>
 #include <cstdlib>
@@ -126,14 +129,20 @@ public:
 class TimeoutLogic {
     std::optional<ch::steady_clock::time_point> cutoff;
 public:
-    auto timeout(bool hasKids) -> std::optional<ch::milliseconds> {
+    auto timeout(bool hasKids) -> timespec const* {
+        static timespec to;
         if (hasKids) {
-            return {};
+            return nullptr;
         } else if (cutoff) {
-            return std::max(0ms, ch::round<ch::milliseconds>(*cutoff - ch::steady_clock::now()));
+            auto duration = std::max(0ns, *cutoff - ch::steady_clock::now());
+            to.tv_sec = ch::floor<ch::seconds>(duration).count();
+            to.tv_nsec = ch::floor<ch::nanoseconds>(duration).count();
+            return &to;
         } else {
             cutoff = ch::steady_clock::now() + 1s;
-            return 1s;
+            to.tv_sec = 1;
+            to.tv_nsec = 0;
+            return &to;
         }
     }
 };
@@ -160,51 +169,6 @@ public:
 
 };
 
-class SigchldLogic {
-    int read_fd;
-    static std::atomic<int> write_fd;
-    static_assert(decltype(write_fd)::is_always_lock_free); // requirement for use from a signal handler
-
-    static auto cb(int) -> void {
-        char buffer[] {0};
-        write(write_fd, buffer, 1);
-    }
-
-public:
-    SigchldLogic() {
-        auto pipes = Pipe();
-
-        set_cloexec(pipes.write);
-        set_cloexec(pipes.read);
-
-        write_fd = pipes.write;
-        read_fd = pipes.read;
-        start();
-    }
-
-    ~SigchldLogic() {
-        Sigaction(SIGCHLD, {SIG_DFL});
-        Close(read_fd);
-        Close(write_fd);
-    }
-
-    auto resume() const -> void {
-        char buffer[1];
-        read(read_fd, buffer, 1);
-        start();
-    }
-
-    auto start() const -> void {
-        Sigaction(SIGCHLD, {cb, 0, SA_NOCLDSTOP | SA_RESETHAND});
-    }
-
-    auto selectable_fd() const -> int {
-        return read_fd;
-    }
-};
-
-std::atomic<int> SigchldLogic::write_fd;
-
 } // namespace
 
 /// Main function
@@ -224,9 +188,24 @@ auto main(int argc, char** argv) -> int
         PacketLogic packetLogic;
         TimeoutLogic timeoutLogic;
         SpawnLogic spawnLogic(pcap);
-        SigchldLogic sigchldLogic;
 
-        pollfd pollfds[] {{pcap.selectable_fd(), POLLIN}, sigchldLogic.selectable_fd(), POLLIN};
+        int const pcap_fd = pcap.selectable_fd();
+        int const nfds = pcap_fd + 1;
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(pcap_fd, &readfds);
+
+        sigset_t chldmask;
+        sigemptyset(&chldmask);
+        sigaddset(&chldmask, SIGCHLD);
+
+        sigset_t nochldmask;
+        sigfillset(&nochldmask);
+        sigdelset(&nochldmask, SIGCHLD);
+
+        Sigprocmask(SIG_SETMASK, chldmask);
+        Sigaction(SIGCHLD, {[](int){}});
+
         for(;;) {
             while (kids < options.spawn_limit && addr < end) {
                 spawnLogic.spawn(addr);
@@ -234,16 +213,17 @@ auto main(int argc, char** argv) -> int
                 addr++;
             }
 
-            auto events = Poll(pollfds, timeoutLogic.timeout(kids));
-            if (events == 0) {
-                return 0;
-            }
-            if (pollfds[0].revents & POLLIN) {
-                pcap.dispatch(0, packetLogic);
-            }
-            if (pollfds[1].revents & POLLIN) {
-                sigchldLogic.resume();
+            fd_set fds;
+            FD_COPY(&readfds, &fds);
+            auto events = pselect(nfds, &fds, nullptr, nullptr, timeoutLogic.timeout(kids), &nochldmask);
+            switch (events) {
+            case -1:
                 while (kids && Wait(-1, WNOHANG).first) { kids--; }
+                break;
+            case 0:
+                return 0;
+            case 1:
+                pcap.dispatch(0, packetLogic);
             }
         }
 

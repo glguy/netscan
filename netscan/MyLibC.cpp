@@ -75,6 +75,15 @@ auto Sigaction(int sig, struct sigaction const& act) -> struct sigaction {
     return old;
 }
 
+auto Sigprocmask(int how, sigset_t const& set) -> sigset_t {
+    sigset_t old;
+    auto res = sigprocmask(how, &set, &old);
+    if (-1 == res) {
+        throw std::system_error(errno, std::generic_category(), "sigprocmask");
+    }
+    return old;
+}
+
 /// Create descriptor pair for interprocess communication
 /// @return pair of file descriptors
 /// @exception std::system\_error

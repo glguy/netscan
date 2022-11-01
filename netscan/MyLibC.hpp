@@ -32,6 +32,7 @@ auto Fork() -> pid_t;
 auto Kill(pid_t pid, int sig) -> void;
 auto InAddrPton(char const* str) -> std::optional<in_addr_t>;
 auto Sigaction(int sig, struct sigaction const& act) -> struct sigaction;
+auto Sigprocmask(int how, sigset_t const& set) -> sigset_t;
 auto Close(int fd) -> void;
 auto WriteAll(int fd, char const* buf, size_t n) -> size_t;
 auto ReadAll(int fd, char* buf, size_t n) -> size_t;
