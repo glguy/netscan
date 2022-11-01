@@ -126,27 +126,6 @@ public:
     }
 };
 
-class TimeoutLogic {
-    std::optional<ch::steady_clock::time_point> cutoff;
-public:
-    auto timeout(bool hasKids) -> timespec const* {
-        static timespec to;
-        if (hasKids) {
-            return nullptr;
-        } else if (cutoff) {
-            auto duration = std::max(0ns, *cutoff - ch::steady_clock::now());
-            to.tv_sec = ch::floor<ch::seconds>(duration).count();
-            to.tv_nsec = ch::floor<ch::nanoseconds>(duration).count();
-            return &to;
-        } else {
-            cutoff = ch::steady_clock::now() + 1s;
-            to.tv_sec = 1;
-            to.tv_nsec = 0;
-            return &to;
-        }
-    }
-};
-
 class SpawnLogic {
     PosixSpawnAttr attr;
     PosixSpawnFileActions actions;
@@ -156,7 +135,7 @@ class SpawnLogic {
     char* args[5] {arg0, arg1, arg2, nullptr, nullptr};
 
 public:
-    SpawnLogic(Pcap const& pcap) {
+    SpawnLogic() {
         actions.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
         actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
     }
@@ -167,6 +146,56 @@ public:
         PosixSpawnp("ping", actions, attr, args, nullptr);
     }
 
+};
+
+class SelectLogic {
+
+    int nfds;
+    fd_set readfds;
+    sigset_t chldmask;
+    sigset_t nochldmask;
+    std::optional<ch::steady_clock::time_point> cutoff;
+
+    auto timeout(bool hasKids) -> std::optional<timespec> {
+        static timespec to;
+        if (hasKids) {
+            return {};
+        } else if (cutoff) {
+            auto duration = std::max(0ns, *cutoff - ch::steady_clock::now());
+            to.tv_sec = ch::floor<ch::seconds>(duration).count();
+            to.tv_nsec = ch::floor<ch::nanoseconds>(duration).count();
+            return to;
+        } else {
+            cutoff = ch::steady_clock::now() + 1s;
+            to.tv_sec = 1;
+            to.tv_nsec = 0;
+            return to;
+        }
+    }
+
+public:
+    SelectLogic(int pcap_fd) {
+        nfds = pcap_fd + 1;
+
+        FD_ZERO(&readfds);
+        FD_SET(pcap_fd, &readfds);
+
+        sigemptyset(&chldmask);
+        sigaddset(&chldmask, SIGCHLD);
+
+        sigfillset(&nochldmask);
+        sigdelset(&nochldmask, SIGCHLD);
+
+        Sigprocmask(SIG_SETMASK, chldmask);
+        Sigaction(SIGCHLD, {[](int){}});
+    }
+
+    auto wait(bool hasKids) {
+        fd_set fds;
+        FD_COPY(&readfds, &fds);
+        auto to = timeout(hasKids);
+        return pselect(nfds, &fds, nullptr, nullptr, to ? &*to : nullptr, &nochldmask);
+    }
 };
 
 } // namespace
@@ -186,25 +215,8 @@ auto main(int argc, char** argv) -> int
         auto kids = 0;
 
         PacketLogic packetLogic;
-        TimeoutLogic timeoutLogic;
-        SpawnLogic spawnLogic(pcap);
-
-        int const pcap_fd = pcap.selectable_fd();
-        int const nfds = pcap_fd + 1;
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(pcap_fd, &readfds);
-
-        sigset_t chldmask;
-        sigemptyset(&chldmask);
-        sigaddset(&chldmask, SIGCHLD);
-
-        sigset_t nochldmask;
-        sigfillset(&nochldmask);
-        sigdelset(&nochldmask, SIGCHLD);
-
-        Sigprocmask(SIG_SETMASK, chldmask);
-        Sigaction(SIGCHLD, {[](int){}});
+        SpawnLogic spawnLogic;
+        SelectLogic selectLogic(pcap.selectable_fd());
 
         for(;;) {
             while (kids < options.spawn_limit && addr < end) {
@@ -213,9 +225,7 @@ auto main(int argc, char** argv) -> int
                 addr++;
             }
 
-            fd_set fds;
-            FD_COPY(&readfds, &fds);
-            auto events = pselect(nfds, &fds, nullptr, nullptr, timeoutLogic.timeout(kids), &nochldmask);
+            auto events = selectLogic.wait(kids);
             switch (events) {
             case -1:
                 while (kids && Wait(-1, WNOHANG).first) { kids--; }

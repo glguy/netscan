@@ -51,7 +51,7 @@ public:
     auto dispatch(int cnt, pcap_handler callback, u_char *user) -> int;
     auto fileno() const -> int;
     auto next() -> std::optional<std::pair<pcap_pkthdr*, u_char const*>>;
-    auto selectable_fd() -> int;
+    auto selectable_fd() const -> int;
     auto required_select_timeout() -> timeval const*;
     auto set_nonblock(int x) -> void;
 

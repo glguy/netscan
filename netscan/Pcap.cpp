@@ -61,7 +61,7 @@ auto Pcap::next() -> std::optional<std::pair<pcap_pkthdr*, u_char const*>> {
     }
 }
 
-auto Pcap::selectable_fd() -> int {
+auto Pcap::selectable_fd() const -> int {
     return checked(pcap_get_selectable_fd(_pcap.get()));
 }
 
