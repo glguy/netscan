@@ -155,21 +155,24 @@ class SelectLogic {
     sigset_t nochldmask_;
     std::optional<ch::steady_clock::time_point> cutoff_;
 
+    template <class Rep, class Period>
+    static auto to_timespec(ch::duration<Rep, Period> duration) -> timespec {
+        timespec result;
+        result.tv_sec  = ch::floor<ch::seconds    >(duration     ).count();
+        result.tv_nsec = ch::floor<ch::nanoseconds>(duration % 1s).count();
+        return result;
+    }
+
     auto timeout(bool hasKids) -> std::optional<timespec> {
-        static timespec to;
         if (hasKids) {
             return {};
-        } else if (cutoff_) {
-            auto duration = std::max(0ns, *cutoff_ - ch::steady_clock::now());
-            to.tv_sec = ch::floor<ch::seconds>(duration).count();
-            to.tv_nsec = ch::floor<ch::nanoseconds>(duration).count();
-            return to;
-        } else {
-            cutoff_ = ch::steady_clock::now() + 1s;
-            to.tv_sec = 1;
-            to.tv_nsec = 0;
-            return to;
         }
+        auto now = ch::steady_clock::now();
+        if (cutoff_) {
+            return to_timespec(std::max(decltype(now)::duration::zero(), *cutoff_ - now));
+        }
+        cutoff_ = now + 1s;
+        return to_timespec(1s);
     }
 
 public:
