@@ -21,7 +21,7 @@
 //! Wrapper class for pcap_t
 class Pcap {
     struct PcapDelete { auto operator()(pcap_t* p) const noexcept -> void; };
-    std::unique_ptr<pcap_t, PcapDelete> _pcap;
+    std::unique_ptr<pcap_t, PcapDelete> pcap_;
 
     explicit Pcap(pcap_t* p) noexcept;
     auto checked(int res) const -> int;
@@ -46,7 +46,7 @@ public:
 
     /// set the filter
     /// @param program  filter program
-    auto setfilter(BpfProgram* program) -> void;
+    auto setfilter(BpfProgram program) -> void;
 
     auto dispatch(int cnt, pcap_handler callback, u_char *user) -> int;
     auto fileno() const -> int;

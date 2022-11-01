@@ -18,10 +18,18 @@ auto BpfProgram::operator=(BpfProgram &&rhs) noexcept -> BpfProgram& {
     return *this;
 }
 
-BpfProgram::BpfProgram(BpfProgram &&rhs) noexcept : bpf_program{} {
-    std::swap<bpf_program>(*this, rhs);
+BpfProgram::BpfProgram(BpfProgram &&rhs) noexcept : program_{} {
+    std::swap(program_, rhs.program_);
 };
 
 BpfProgram::~BpfProgram() {
-    pcap_freecode(this);
+    pcap_freecode(&program_);
+}
+
+auto BpfProgram::get() -> bpf_program* {
+    return &program_;
+}
+
+auto BpfProgram::get() const -> bpf_program const* {
+    return &program_;
 }

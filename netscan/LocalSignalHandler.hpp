@@ -13,8 +13,8 @@
 #include <csignal>
 
 class LocalSignalHandler {
-    int sig;
-    struct sigaction previous;
+    int sig_;
+    struct sigaction previous_;
 public:
     LocalSignalHandler(int sig, struct sigaction const& act);
     LocalSignalHandler(LocalSignalHandler const&) = delete;

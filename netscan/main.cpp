@@ -50,8 +50,7 @@ auto pcap_setup(std::string const& device) -> Pcap
 {
     auto p = Pcap::open_live(device.c_str(), 16, 0, 100ms);
     auto filter = "icmp[icmptype] == icmp-echoreply";
-    auto program = p.compile(filter, true, PCAP_NETMASK_UNKNOWN);
-    p.setfilter(&program);
+    p.setfilter(p.compile(filter, true, PCAP_NETMASK_UNKNOWN));
     return p;
 }
 
@@ -111,7 +110,7 @@ auto set_cloexec(int fd) {
 
 // Logic to be applied to each of the packets
 class PacketLogic {
-    std::unordered_set<std::string> macs;
+    std::unordered_set<std::string> macs_;
 public:
     auto operator()(auto pkt_header, auto pkt_data) -> void {
         if (11 < pkt_header->caplen) {
@@ -119,7 +118,7 @@ public:
                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
                pkt_data[ 6], pkt_data[ 7], pkt_data[ 8],
                pkt_data[ 9], pkt_data[10], pkt_data[11]);
-            if (macs.insert(mac).second) {
+            if (macs_.insert(mac).second) {
                 std::cout << mac << std::endl;
             }
         }
@@ -127,46 +126,46 @@ public:
 };
 
 class SpawnLogic {
-    PosixSpawnAttr attr;
-    PosixSpawnFileActions actions;
-    char arg0[5] {"ping"};
-    char arg1[4] {"-W1"};
-    char arg2[4] {"-c1"};
-    char* args[5] {arg0, arg1, arg2, nullptr, nullptr};
+    PosixSpawnAttr attr_;
+    PosixSpawnFileActions actions_;
+    char arg0_[5] {"ping"};
+    char arg1_[4] {"-W1"};
+    char arg2_[4] {"-c1"};
+    char* args_[5] {arg0_, arg1_, arg2_, nullptr, nullptr};
 
 public:
     SpawnLogic() {
-        actions.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
-        actions.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
+        actions_.addopen( STDIN_FILENO, "/dev/null", O_RDONLY);
+        actions_.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
     }
 
     auto spawn(uint32_t addr) {
         auto arg = std::to_string(addr);
-        args[3] = arg.data(); // null-terminated since C++11
-        PosixSpawnp("ping", actions, attr, args, nullptr);
+        args_[3] = arg.data(); // null-terminated since C++11
+        PosixSpawnp("ping", actions_, attr_, args_, nullptr);
     }
 
 };
 
 class SelectLogic {
 
-    int nfds;
-    fd_set readfds;
-    sigset_t chldmask;
-    sigset_t nochldmask;
-    std::optional<ch::steady_clock::time_point> cutoff;
+    int nfds_;
+    fd_set readfds_;
+    sigset_t chldmask_;
+    sigset_t nochldmask_;
+    std::optional<ch::steady_clock::time_point> cutoff_;
 
     auto timeout(bool hasKids) -> std::optional<timespec> {
         static timespec to;
         if (hasKids) {
             return {};
-        } else if (cutoff) {
-            auto duration = std::max(0ns, *cutoff - ch::steady_clock::now());
+        } else if (cutoff_) {
+            auto duration = std::max(0ns, *cutoff_ - ch::steady_clock::now());
             to.tv_sec = ch::floor<ch::seconds>(duration).count();
             to.tv_nsec = ch::floor<ch::nanoseconds>(duration).count();
             return to;
         } else {
-            cutoff = ch::steady_clock::now() + 1s;
+            cutoff_ = ch::steady_clock::now() + 1s;
             to.tv_sec = 1;
             to.tv_nsec = 0;
             return to;
@@ -175,26 +174,26 @@ class SelectLogic {
 
 public:
     SelectLogic(int pcap_fd) {
-        nfds = pcap_fd + 1;
+        nfds_ = pcap_fd + 1;
 
-        FD_ZERO(&readfds);
-        FD_SET(pcap_fd, &readfds);
+        FD_ZERO(&readfds_);
+        FD_SET(pcap_fd, &readfds_);
 
-        sigemptyset(&chldmask);
-        sigaddset(&chldmask, SIGCHLD);
+        sigemptyset(&chldmask_);
+        sigaddset(&chldmask_, SIGCHLD);
 
-        sigfillset(&nochldmask);
-        sigdelset(&nochldmask, SIGCHLD);
+        sigfillset(&nochldmask_);
+        sigdelset(&nochldmask_, SIGCHLD);
 
-        Sigprocmask(SIG_SETMASK, chldmask);
+        Sigprocmask(SIG_SETMASK, chldmask_);
         Sigaction(SIGCHLD, {[](int){}});
     }
 
     auto wait(bool hasKids) {
         fd_set fds;
-        FD_COPY(&readfds, &fds);
+        FD_COPY(&readfds_, &fds);
         auto to = timeout(hasKids);
-        return pselect(nfds, &fds, nullptr, nullptr, to ? &*to : nullptr, &nochldmask);
+        return pselect(nfds_, &fds, nullptr, nullptr, to ? &*to : nullptr, &nochldmask_);
     }
 };
 
