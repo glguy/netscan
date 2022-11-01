@@ -32,7 +32,6 @@
 #include <fmt/format.h>
 #include <pcap/pcap.h>
 
-#include "LocalSignalHandler.hpp"
 #include "MyLibC.hpp"
 #include "Pcap.hpp"
 #include "PosixSpawn.hpp"
@@ -58,6 +57,7 @@ struct ipv4_argument {
     in_addr_t value;
 };
 
+// Used by boost::program_options internally
 auto validate(boost::any& v, std::vector<std::string> const& values, ipv4_argument*, int) -> void {
     namespace po = boost::program_options;
     po::validators::check_first_occurrence(v);
@@ -104,7 +104,7 @@ auto get_options(int argc, char** argv) -> options {
     return o;
 }
 
-auto set_cloexec(int fd) {
+auto set_cloexec(int fd) -> void {
     FcntlSetFd(fd, FD_CLOEXEC |  FcntlGetFd(fd));
 }
 
@@ -139,12 +139,11 @@ public:
         actions_.addopen(STDOUT_FILENO, "/dev/null", O_WRONLY);
     }
 
-    auto spawn(uint32_t addr) {
+    auto spawn(uint32_t addr) -> void {
         auto arg = std::to_string(addr);
         args_[3] = arg.data(); // null-terminated since C++11
         PosixSpawnp("ping", actions_, attr_, args_, nullptr);
     }
-
 };
 
 class SelectLogic {

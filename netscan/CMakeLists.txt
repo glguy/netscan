@@ -9,7 +9,7 @@ else()
 endif()
 
 add_executable(netscan
-    BpfProgram.cpp Pcap.cpp PosixSpawnFileActions.cpp LocalSignalHandler.cpp
+    BpfProgram.cpp Pcap.cpp PosixSpawnFileActions.cpp
     PosixSpawn.cpp main.cpp MyLibC.cpp PosixSpawnAttr.cpp)
 
 target_link_libraries(netscan PRIVATE PkgConfig::FMT Boost::headers Boost::program_options)
